@@ -13,7 +13,7 @@
   button { font: inherit; cursor: pointer; border: 0; border-radius: 12px; padding: 10px 14px; background: #2d1b4e; color: #fff; }
   button:hover { filter: brightness(1.15); }
   input, select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #5b3d8a; background: #1e1233; color: #fff; width: 100%; }
-  .screen { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 4, 20, .45); }
+  .screen { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 4, 20, .45); overflow-y: auto; }
   .card { width: 100%; max-width: 380px; background: #1b0f2e; border: 2px solid #ff7a00; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 40px rgba(255, 122, 0, .35); }
   .card h1 { margin: 0; font-size: 32px; color: #ffb300; text-align: center; }
   .card h2 { margin: 0; color: #ffb300; text-align: center; }
@@ -23,6 +23,10 @@
   .card label input { width: auto; }
   .primary { background: #ff7a00; color: #1b0f2e; font-weight: 700; padding: 12px; }
   .hint { font-size: 13px; text-align: center; }
+  .how { margin: 0; padding-left: 20px; color: #d9c8f0; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+  #legend { position: fixed; left: 12px; top: 60px; z-index: 500; background: rgba(27, 15, 46, .9); border: 2px solid #2121de; border-radius: 12px; padding: 8px 10px; font-size: 12px; line-height: 1.7; }
+  #legend b { color: #ffd400; }
+  #next { font-size: 10px; color: #fff; }
   #board { margin: 0; padding-left: 22px; max-height: 200px; overflow: auto; }
   #board li { padding: 3px 0; }
   #board li.me { color: #ffb300; font-weight: 700; }
@@ -74,6 +78,13 @@
   <div class="card">
     <h1>🎃 Pack_Ween</h1>
     <p>Trick-or-treat like Pac-Man! Walk up to a house to grab its candy. Most candy in the fastest time wins.</p>
+    <ol class="how">
+      <li>🟡 You are Pac-Man on a real map of your neighbourhood.</li>
+      <li>🏠🍬 Houses with candy are volunteers handing out treats. Plain 🏠 have none.</li>
+      <li>Get within <b>25 m</b> of a candy house and the candy is claimed automatically.</li>
+      <li>🧭 Route shows the shortest path (Pac-dots) to every candy house.</li>
+      <li>🏁 End session to see the leaderboard, then 💬 chat with neighbours.</li>
+    </ol>
     <input id="name" placeholder="Your name" maxlength="20">
     <select id="zone">
       <option value="street">Street leaderboard</option>
@@ -86,7 +97,17 @@
   </div>
 </div>
 
-<div id="hud" hidden>🍬 <span id="score">0</span>/<span id="total">0</span> &nbsp;⏱ <span id="time">0:00</span></div>
+<div id="hud" hidden>🍬 <span id="score">0</span>/<span id="total">0</span> &nbsp;⏱ <span id="time">0:00</span><br><span id="next"></span></div>
+
+<div id="legend" hidden>
+  <b>LEGEND</b><br>
+  🟡 You (Pac-Man)<br>
+  🏠🍬 Candy house<br>
+  🏠 No candy<br>
+  ⭕ 25 m claim zone<br>
+  👻 Ghosts (just spooky)<br>
+  <span style="color:#ffd400">• • •</span> Route to candy
+</div>
 
 <div id="pad" hidden>
   <button class="u" data-dir="up" aria-label="Up">▲</button>
@@ -178,10 +199,10 @@ function drawDecorHouses() {
   const lng0 = houses.reduce((a, h) => a + h.lng, 0) / houses.length;
   let seed = 7;
   const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-  for (let n = -360; n <= 360; n += 45) {
-    for (let e = -360; e <= 360; e += 30) {
-      if (rand() < 0.35) continue;
-      const [lat, lng] = offset(lat0, lng0, n + (rand() - 0.5) * 10, e + (rand() - 0.5) * 10);
+  for (let n = -260; n <= 260; n += 28) {
+    for (let e = -260; e <= 260; e += 24) {
+      if (rand() < 0.3) continue;
+      const [lat, lng] = offset(lat0, lng0, n + (rand() - 0.5) * 18, e + (rand() - 0.5) * 16);
       if (houses.some((h) => distanceMeters(lat, lng, h.lat, h.lng) < 22)) continue;
       L.marker([lat, lng], { icon: decorIcon, interactive: false }).addTo(houseLayer);
     }
@@ -220,11 +241,24 @@ function getLocation() {
 }
 
 // Demo: if there are no candy houses near the player, place a few around them
-const DEMO_SPOTS = [[35, 20, "Pumpkin Porch"], [-40, 30, "Witchy Way"], [25, -45, "Bat Cave"], [-30, -35, "Spooky Manor"], [65, -5, "Ghost Garden"], [-10, 70, "Candy Castle"]];
+const DEMO_SPOTS = [
+  [35, 20, "Pumpkin Porch"], [-40, 30, "Witchy Way"], [25, -45, "Bat Cave"], [-30, -35, "Spooky Manor"],
+  [65, -5, "Ghost Garden"], [-10, 70, "Candy Castle"], [95, 55, "Cauldron Corner"], [-85, -70, "Skeleton Shack"],
+  [-110, 40, "Vampire Villa"], [80, -95, "Mummy Manor"], [15, 120, "Haunted Hut"], [-60, 115, "Zombie Lane"],
+];
+// Run the demo setup only once even if load and Start both ask for it
+let ensurePromise = null;
+function ensureOnce(pos) {
+  if (!ensurePromise) ensurePromise = ensureHousesNear(pos).catch((e) => { ensurePromise = null; throw e; });
+  return ensurePromise;
+}
 async function ensureHousesNear(pos) {
   let near = await api(`/houses?lat=${pos.lat}&lng=${pos.lng}&radius=400`);
-  if (near.length === 0) {
+  // Only add demo houses if this area has no real volunteer houses yet
+  const realNear = near.filter((h) => !DEMO_SPOTS.some((d) => d[2] === h.name));
+  if (realNear.length === 0 && near.length < DEMO_SPOTS.length) {
     for (const [n, e, name] of DEMO_SPOTS) {
+      if (near.some((h) => h.name === name)) continue;
       const [lat, lng] = offset(pos.lat, pos.lng, n, e);
       await api("/houses", { name, lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) });
     }
@@ -267,8 +301,22 @@ function move(dir) {
 }
 
 // ---------- Collecting candy ----------
+function updateNext() {
+  let best = null, bestD = Infinity;
+  for (const h of houses) {
+    if (collected.has(h.id)) continue;
+    const d = distanceMeters(me.lat, me.lng, h.lat, h.lng);
+    if (d < bestD) { best = h; bestD = d; }
+  }
+  if (!best) { $("next").textContent = "All candy collected!"; return; }
+  const dn = best.lat - me.lat, de = (best.lng - me.lng) * Math.cos((me.lat * Math.PI) / 180);
+  const arrow = Math.abs(dn) > Math.abs(de) ? (dn > 0 ? "↑" : "↓") : (de > 0 ? "→" : "←");
+  $("next").textContent = `Next 🍬 ${best.name} ${Math.round(bestD)} m ${arrow}`;
+}
+
 function checkHouses() {
   if (!runId || ended) return;
+  updateNext();
   for (const h of houses) {
     if (collected.has(h.id) || pending.has(h.id)) continue;
     if (distanceMeters(me.lat, me.lng, h.lat, h.lng) > RADIUS) continue;
@@ -278,6 +326,7 @@ function checkHouses() {
         collected.add(h.id);
         markers[h.id].setIcon(candyIcon(true));
         $("score").textContent = collected.size;
+        updateNext();
         const left = houses.length - collected.size;
         toast(left === 0 ? "🎉 WAKA WAKA! All candy collected! Hit End session." : `🍬 +1 candy from ${h.name}! ${left} left`);
         if (routeLine) showRoute();
@@ -313,7 +362,7 @@ function showAllCandy() {
 (async () => {
   try {
     const pos = await getLocation();
-    const list = pos ? await ensureHousesNear(pos) : await api("/houses");
+    const list = pos ? await ensureOnce(pos) : await api("/houses");
     if (runId) return;
     houses = list;
     drawHouses();
@@ -334,7 +383,7 @@ $("go").onclick = async () => {
     const pos = await getLocation();
     btn.textContent = "Waking up the haunted server…";
     if (pos) {
-      houses = await ensureHousesNear(pos);
+      houses = await ensureOnce(pos);
       startPos = pos;
     } else {
       houses = await api("/houses");
@@ -351,6 +400,7 @@ $("go").onclick = async () => {
   $("start").hidden = true;
   map.invalidateSize();
   $("hud").hidden = false;
+  $("legend").hidden = false;
   $("bar").hidden = false;
   startedAt = Date.now();
   timer = setInterval(() => {
