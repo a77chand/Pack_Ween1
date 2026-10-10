@@ -23,6 +23,9 @@ The 10 seed houses have fixed coordinates within about 300 m of `CENTER` (lat 43
 ## Endpoints
 
 ### `GET /`
+Serves the game page (`backend/public/index.html`).
+
+### `GET /health`
 Health check. Response: `{"status":"ok"}`
 
 ### `GET /houses`
@@ -77,6 +80,15 @@ Nearest-neighbor walking order through the houses, starting from `lat`/`lng`. `r
 ```json
 {"totalMeters":2058,"stops":[{"id":7,"name":"House 7","lat":43.474636,"lng":-80.543415,"legMeters":161}, ...]}
 ```
+
+### `GET /chat?zone=street`
+Last 50 community chat messages (`zone` optional).
+```json
+[{"id":1,"player":"amy","zone":"street","text":"House 3 has full size bars!","time":1791664053703}]
+```
+
+### `POST /chat`
+Body: `{"player":"amy","zone":"street","text":"Hi!"}`. Only `text` is required (max 300 chars). Returns the saved message.
 
 ### Unknown routes
 404 `{"error":"not found"}`

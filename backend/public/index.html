@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Pack_Ween</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #12091f; color: #fff; }
+  #map { position: fixed; inset: 0; z-index: 1; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 12px; padding: 10px 14px; background: #2d1b4e; color: #fff; }
+  button:hover { filter: brightness(1.15); }
+  input, select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #5b3d8a; background: #1e1233; color: #fff; width: 100%; }
+  .screen { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 4, 20, .82); }
+  .card { width: 100%; max-width: 380px; background: #1b0f2e; border: 2px solid #ff7a00; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 40px rgba(255, 122, 0, .35); }
+  .card h1 { margin: 0; font-size: 32px; color: #ffb300; text-align: center; }
+  .card h2 { margin: 0; color: #ffb300; text-align: center; }
+  .card h3 { margin: 6px 0 0; }
+  .card p { margin: 0; color: #d9c8f0; }
+  .card label { display: flex; gap: 8px; align-items: center; color: #d9c8f0; }
+  .card label input { width: auto; }
+  .primary { background: #ff7a00; color: #1b0f2e; font-weight: 700; padding: 12px; }
+  .hint { font-size: 13px; text-align: center; }
+  #board { margin: 0; padding-left: 22px; max-height: 200px; overflow: auto; }
+  #board li { padding: 3px 0; }
+  #board li.me { color: #ffb300; font-weight: 700; }
+  #hud { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 500; background: rgba(27, 15, 46, .92); border: 2px solid #ff7a00; border-radius: 999px; padding: 8px 18px; font-weight: 700; white-space: nowrap; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 500; display: flex; gap: 8px; justify-content: center; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(18, 9, 31, .92); }
+  #bar .end { background: #ff7a00; color: #1b0f2e; font-weight: 700; }
+  #bar .end.sure { background: #e0245e; color: #fff; }
+  #pad { position: fixed; right: 16px; bottom: 80px; z-index: 500; display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(3, 48px); gap: 4px; }
+  #pad button { padding: 0; font-size: 20px; background: rgba(45, 27, 78, .92); border: 1px solid #5b3d8a; }
+  #pad .u { grid-column: 2; grid-row: 1; } #pad .l { grid-column: 1; grid-row: 2; }
+  #pad .r { grid-column: 3; grid-row: 2; } #pad .d { grid-column: 2; grid-row: 3; }
+  #chat { position: fixed; z-index: 1100; right: 16px; bottom: 80px; width: min(360px, calc(100% - 32px)); height: min(460px, 65vh); background: #1b0f2e; border: 2px solid #ff7a00; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
+  .chat-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #2d1b4e; font-weight: 700; }
+  .chat-head button { padding: 4px 10px; }
+  #msgs { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { background: #2d1b4e; border-radius: 10px; padding: 6px 10px; }
+  .msg b { color: #ffb300; }
+  .msg small { color: #a78fc9; margin-left: 6px; }
+  .empty { color: #a78fc9; text-align: center; margin-top: 20px; }
+  #chatForm { display: flex; gap: 6px; padding: 10px; border-top: 1px solid #3a2560; }
+  #chatForm button { background: #ff7a00; color: #1b0f2e; font-weight: 700; }
+  #toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%) translateY(-20px); z-index: 2000; background: #ff7a00; color: #1b0f2e; font-weight: 700; padding: 10px 16px; border-radius: 12px; opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100% - 32px); text-align: center; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .pac-wrap { width: 30px; height: 30px; }
+  .pac { width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(from 120deg, #ffd400 0 300deg, transparent 300deg 360deg); animation: chomp .35s infinite alternate; transition: transform .15s; filter: drop-shadow(0 0 6px #ffd400); }
+  @keyframes chomp { to { background: conic-gradient(from 100deg, #ffd400 0 340deg, transparent 340deg 360deg); } }
+  .candy { font-size: 28px; line-height: 1; filter: drop-shadow(0 0 4px #ff7a00); }
+  .candy.done { opacity: .45; filter: grayscale(1); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="start" class="screen">
+  <div class="card">
+    <h1>🎃 Pack_Ween</h1>
+    <p>Trick-or-treat like Pac-Man! Walk up to a house to grab its candy. Most candy in the fastest time wins.</p>
+    <input id="name" placeholder="Your name" maxlength="20">
+    <select id="zone">
+      <option value="street">Street leaderboard</option>
+      <option value="district">District leaderboard</option>
+      <option value="city">City leaderboard</option>
+    </select>
+    <label><input type="checkbox" id="gps"> Use my real GPS location</label>
+    <button id="go" class="primary">Start trick-or-treating</button>
+    <p class="hint">No GPS? Walk with the arrow keys / WASD or the on-screen arrows.</p>
+  </div>
+</div>
+
+<div id="hud" hidden>🍬 <span id="score">0</span>/<span id="total">0</span> &nbsp;⏱ <span id="time">0:00</span></div>
+
+<div id="pad" hidden>
+  <button class="u" data-dir="up" aria-label="Up">▲</button>
+  <button class="l" data-dir="left" aria-label="Left">◀</button>
+  <button class="r" data-dir="right" aria-label="Right">▶</button>
+  <button class="d" data-dir="down" aria-label="Down">▼</button>
+</div>
+
+<div id="bar" hidden>
+  <button id="routeBtn">🧭 Route</button>
+  <button id="chatBtn">💬 Chat</button>
+  <button id="endBtn" class="end">🏁 End session</button>
+</div>
+
+<aside id="chat" hidden>
+  <div class="chat-head"><span>👻 Neighbourhood chat</span><button id="chatClose" aria-label="Close chat">✕</button></div>
+  <div id="msgs"></div>
+  <form id="chatForm"><input id="chatText" maxlength="300" placeholder="Which house has the best candy?" autocomplete="off"><button>Send</button></form>
+</aside>
+
+<div id="results" class="screen" hidden>
+  <div class="card">
+    <h2>🏁 Session over!</h2>
+    <p id="summary"></p>
+    <h3>🏆 Leaderboard</h3>
+    <ol id="board"></ol>
+    <button id="resChat">💬 Share your night in the community chat</button>
+    <button id="again" class="primary">Play again</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// Same server when hosted on Render/localhost, otherwise call the Render backend
+const API = (location.hostname === "localhost" || location.hostname.endsWith("onrender.com")) ? "" : "https://pack-ween1.onrender.com";
+const RADIUS = 25;   // must match VISIT_RADIUS_METERS on the server
+const STEP = 6;      // meters per arrow press
+const $ = (id) => document.getElementById(id);
+
+let houses = [], markers = {}, collected = new Set(), pending = new Set();
+let me = null, meMarker = null, heading = 0;
+let runId = null, player = "anon", zone = "street", startedAt = 0, timer = null;
+let useGps = false, watchId = null, routeLine = null, chatTimer = null, ended = false;
+
+async function api(path, body) {
+  const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const res = await fetch(API + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+  return data;
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ---------- Map ----------
+const map = L.map("map", { zoomControl: false }).setView([43.4723, -80.5449], 17);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
+}).addTo(map);
+
+const candyIcon = (done) => L.divIcon({ className: "", html: `<div class="candy${done ? " done" : ""}">${done ? "✅" : "🍬"}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+const pacIcon = L.divIcon({ className: "", html: '<div class="pac-wrap"><div class="pac"></div></div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+
+function drawHouses() {
+  for (const h of houses) {
+    L.circle([h.lat, h.lng], { radius: RADIUS, color: "#ff7a00", weight: 1, fillOpacity: 0.08 }).addTo(map);
+    markers[h.id] = L.marker([h.lat, h.lng], { icon: candyIcon(false) }).addTo(map).bindTooltip(h.name);
+  }
+  $("total").textContent = houses.length;
+}
+
+function setPos(lat, lng) {
+  me = { lat, lng };
+  if (!meMarker) meMarker = L.marker([lat, lng], { icon: pacIcon, zIndexOffset: 1000 }).addTo(map);
+  else meMarker.setLatLng([lat, lng]);
+  const pac = meMarker.getElement() && meMarker.getElement().querySelector(".pac");
+  if (pac) pac.style.transform = `rotate(${heading}deg)`;
+  map.panTo([lat, lng], { animate: true });
+  checkHouses();
+}
+
+function move(dir) {
+  if (!me || ended || useGps) return;
+  const [dn, de, rot] = { up: [STEP, 0, 270], down: [-STEP, 0, 90], left: [0, -STEP, 180], right: [0, STEP, 0] }[dir];
+  heading = rot;
+  setPos(me.lat + dn / 111320, me.lng + de / (111320 * Math.cos((me.lat * Math.PI) / 180)));
+}
+
+// ---------- Collecting candy ----------
+function checkHouses() {
+  if (!runId || ended) return;
+  for (const h of houses) {
+    if (collected.has(h.id) || pending.has(h.id)) continue;
+    if (distanceMeters(me.lat, me.lng, h.lat, h.lng) > RADIUS) continue;
+    pending.add(h.id);
+    api(`/runs/${runId}/visit`, { houseId: h.id, lat: me.lat, lng: me.lng })
+      .then((r) => {
+        collected.add(h.id);
+        markers[h.id].setIcon(candyIcon(true));
+        $("score").textContent = collected.size;
+        toast(r.remaining === 0 ? "🎉 You collected ALL the candy! Hit End session." : `🍬 Candy from ${h.name}! ${r.remaining} left`);
+        if (routeLine) showRoute();
+      })
+      .catch((e) => toast(e.message))
+      .finally(() => pending.delete(h.id));
+  }
+}
+
+// ---------- Route ----------
+async function showRoute() {
+  if (!me) return;
+  try {
+    const r = await api(`/route?lat=${me.lat}&lng=${me.lng}&runId=${runId}`);
+    if (routeLine) map.removeLayer(routeLine);
+    routeLine = L.polyline([[me.lat, me.lng], ...r.stops.map((s) => [s.lat, s.lng])], { color: "#ffd400", weight: 4, dashArray: "6 8" }).addTo(map);
+    toast(r.stops.length ? `🧭 Best route: ${r.totalMeters} m to all ${r.stops.length} houses` : "No houses left!");
+  } catch (e) { toast(e.message); }
+}
+$("routeBtn").onclick = () => {
+  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  else showRoute();
+};
+
+// ---------- Start ----------
+$("go").onclick = async () => {
+  const btn = $("go");
+  btn.disabled = true;
+  btn.textContent = "Waking up the haunted server…";
+  player = $("name").value.trim() || "anon";
+  zone = $("zone").value;
+  useGps = $("gps").checked;
+  try {
+    houses = await api("/houses");
+    const r = await api("/runs/start", { player, zone });
+    runId = r.runId;
+  } catch (e) {
+    toast("Could not reach the server: " + e.message);
+    btn.disabled = false;
+    btn.textContent = "Start trick-or-treating";
+    return;
+  }
+  drawHouses();
+  $("start").hidden = true;
+  $("hud").hidden = false;
+  $("bar").hidden = false;
+  startedAt = Date.now();
+  timer = setInterval(() => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    $("time").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }, 1000);
+
+  if (useGps && navigator.geolocation) {
+    toast("📍 Finding you…");
+    watchId = navigator.geolocation.watchPosition(
+      (p) => setPos(p.coords.latitude, p.coords.longitude),
+      (err) => toast("GPS error: " + err.message),
+      { enableHighAccuracy: true, maximumAge: 2000 }
+    );
+  } else {
+    useGps = false;
+    $("pad").hidden = false;
+    // Start in the middle of the neighbourhood
+    const lat = houses.reduce((a, h) => a + h.lat, 0) / houses.length;
+    const lng = houses.reduce((a, h) => a + h.lng, 0) / houses.length;
+    setPos(lat, lng);
+    map.setView([lat, lng], 17);
+    toast("Use the arrows to walk to the 🍬 houses!");
+  }
+};
+
+document.querySelectorAll("#pad button").forEach((b) => (b.onclick = () => move(b.dataset.dir)));
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  const dir = { ArrowUp: "up", w: "up", ArrowDown: "down", s: "down", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" }[e.key];
+  if (dir) { e.preventDefault(); move(dir); }
+});
+
+// ---------- End session ----------
+$("endBtn").onclick = async () => {
+  const btn = $("endBtn");
+  if (!btn.classList.contains("sure")) {
+    btn.classList.add("sure");
+    btn.textContent = "Tap again to end";
+    setTimeout(() => { btn.classList.remove("sure"); btn.textContent = "🏁 End session"; }, 3000);
+    return;
+  }
+  try {
+    const r = await api(`/runs/${runId}/finish`, {});
+    ended = true;
+    clearInterval(timer);
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    $("pad").hidden = true;
+    $("bar").hidden = true;
+    $("summary").textContent = `${player}, you collected ${r.houses} candy in ${Math.floor(r.seconds / 60)}m ${r.seconds % 60}s!`;
+    const board = await api(`/leaderboard?zone=${zone}`);
+    const ol = $("board");
+    ol.innerHTML = "";
+    board.slice(0, 10).forEach((row) => {
+      const li = document.createElement("li");
+      li.textContent = `${row.player}: ${row.houses} 🍬 in ${row.seconds}s`;
+      if (row.player === player && row.houses === r.houses && row.seconds === r.seconds) li.className = "me";
+      ol.appendChild(li);
+    });
+    $("results").hidden = false;
+  } catch (e) { toast(e.message); }
+};
+$("again").onclick = () => location.reload();
+
+// ---------- Community chat ----------
+async function loadChat() {
+  try {
+    const list = await api(`/chat?zone=${zone}`);
+    const box = $("msgs");
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    box.innerHTML = "";
+    if (!list.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "No messages yet. Tell your neighbours which house has the best candy!";
+      box.appendChild(p);
+    }
+    for (const m of list) {
+      const div = document.createElement("div");
+      div.className = "msg";
+      const b = document.createElement("b");
+      b.textContent = m.player;
+      const small = document.createElement("small");
+      small.textContent = new Date(m.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      div.append(b, small, document.createElement("br"), document.createTextNode(m.text));
+      box.appendChild(div);
+    }
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  } catch (e) { /* keep old messages */ }
+}
+function openChat() {
+  $("chat").hidden = false;
+  loadChat().then(() => ($("msgs").scrollTop = $("msgs").scrollHeight));
+  clearInterval(chatTimer);
+  chatTimer = setInterval(loadChat, 3000);
+  $("chatText").focus();
+}
+$("chatBtn").onclick = () => ($("chat").hidden ? openChat() : $("chatClose").onclick());
+$("resChat").onclick = openChat;
+$("chatClose").onclick = () => { $("chat").hidden = true; clearInterval(chatTimer); };
+$("chatForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const text = $("chatText").value.trim();
+  if (!text) return;
+  try {
+    await api("/chat", { player, zone, text });
+    $("chatText").value = "";
+    await loadChat();
+    $("msgs").scrollTop = $("msgs").scrollHeight;
+  } catch (err) { toast(err.message); }
+};
+</script>
+</body>
+</html>

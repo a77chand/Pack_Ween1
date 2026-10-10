@@ -1,9 +1,12 @@
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 
 const app = express();
 app.use(cors()); // open to all origins (hackathon demo)
 app.use(express.json());
+// Serve the game page (backend/public/index.html) at /
+app.use(express.static(path.join(__dirname, "public")));
 
 // ===== DEMO LOCATION: change these to move all seed houses =====
 const CENTER = { lat: 43.4723, lng: -80.5449 };
@@ -43,6 +46,8 @@ let houses = SEED_OFFSETS.map(([north, east], i) => ({
 
 let runs = [];
 let nextRunId = 1;
+let messages = [];
+let nextMsgId = 1;
 
 // Distance between two coordinates in meters (Haversine formula)
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -59,7 +64,7 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 
 // Health check
-app.get("/", (req, res) => res.json({ status: "ok" }));
+app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 // Get houses (optionally only those within ?radius= meters of ?lat=&lng=)
 app.get("/houses", (req, res) => {
@@ -186,6 +191,31 @@ app.get("/route", (req, res) => {
     remaining = remaining.filter((h) => h.id !== best.id);
   }
   res.json({ totalMeters: Math.round(totalMeters), stops: route });
+});
+
+// Community chat (last 50 messages, optional ?zone=)
+app.get("/chat", (req, res) => {
+  const { zone } = req.query;
+  res.json(messages.filter((m) => !zone || m.zone === zone).slice(-50));
+});
+
+app.post("/chat", (req, res) => {
+  const { player, zone, text } = req.body || {};
+  if (typeof text !== "string" || text.trim() === "")
+    return res.status(400).json({ error: "text is required" });
+  const z = zone || "street";
+  if (!ZONES.includes(z))
+    return res.status(400).json({ error: `zone must be one of: ${ZONES.join(", ")}` });
+  const msg = {
+    id: nextMsgId++,
+    player: typeof player === "string" && player.trim() ? player.trim().slice(0, 20) : "anon",
+    zone: z,
+    text: text.trim().slice(0, 300),
+    time: Date.now(),
+  };
+  messages.push(msg);
+  if (messages.length > 200) messages.shift();
+  res.json(msg);
 });
 
 // Unknown routes
