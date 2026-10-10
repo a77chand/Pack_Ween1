@@ -1,0 +1,455 @@
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand-mark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ff9f43, #ff6b6b);
+  box-shadow: 0 14px 24px rgba(255, 136, 68, 0.35);
+  font-size: 1.8rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffd37a;
+}
+
+.eyebrow.accent {
+  color: #ffbf69;
+}
+
+.topbar h1,
+.hero-copy h2,
+.panel-header h2,
+.confirm-row h3 {
+  margin: 6px 0 0;
+  color: #fff8ef;
+}
+
+.ghost-button,
+.primary-button,
+.neighborhood-card {
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ghost-button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff8ef;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 0.8rem 1.2rem;
+  font-weight: 700;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #ff9d2a, #ff5d9e);
+  color: #fff;
+  padding: 0.95rem 1.5rem;
+  border-radius: 16px;
+  font-weight: 800;
+  box-shadow: 0 18px 30px rgba(255, 109, 162, 0.35);
+}
+
+.ghost-button:hover,
+.primary-button:hover,
+.neighborhood-card:hover {
+  transform: translateY(-2px);
+}
+
+.panel {
+  background: rgba(23, 17, 43, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  padding: 24px;
+  box-shadow: 0 30px 60px rgba(16, 8, 26, 0.5);
+}
+
+.auth-panel {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.hero-copy {
+  padding: 16px;
+}
+
+.hero-copy h2 {
+  font-size: clamp(2.4rem, 4vw, 4rem);
+  line-height: 1.05;
+}
+
+.hero-copy p {
+  color: #f4d6ff;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.stat-row div {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stat-row strong {
+  font-size: 1.8rem;
+  color: #fff;
+}
+
+.stat-row span {
+  color: #dcb7ff;
+  font-size: 0.8rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 24px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #f9ebff;
+  font-weight: 700;
+}
+
+.login-form input,
+.login-form select {
+  background: rgba(12, 8, 17, 0.7);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 0.95rem 1rem;
+  font-size: 1rem;
+}
+
+.preview-panel,
+.game-panel,
+.community-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel-header,
+.confirm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.score-pill {
+  background: linear-gradient(135deg, #2dd4bf, #38bdf8);
+  color: #072238;
+  font-weight: 900;
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+}
+
+.route-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  padding: 18px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-card .label {
+  color: #ffcb82;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+}
+
+.summary-card strong {
+  color: #fff;
+  font-size: 1.5rem;
+}
+
+.summary-card small {
+  color: #fed7ea;
+  line-height: 1.5;
+}
+
+.neighborhood-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.neighborhood-card {
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 18px 16px;
+}
+
+.neighborhood-card.selected {
+  background: linear-gradient(135deg, rgba(255, 142, 81, 0.2), rgba(128, 92, 255, 0.2));
+  border-color: rgba(255, 201, 110, 0.8);
+}
+
+.mini-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff8ef;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.neighborhood-card p {
+  margin: 0;
+  color: #fddeff;
+  line-height: 1.5;
+}
+
+.game-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.metric-box {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metric-box span {
+  color: #ffc680;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+}
+
+.metric-box strong {
+  color: #fff;
+  font-size: 1.8rem;
+}
+
+.street-map {
+  position: relative;
+  min-height: 420px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #2d2757 0%, #1a1632 100%);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.street-map::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 15% 25%, rgba(255, 196, 84, 0.18), transparent 25%);
+}
+
+.street-path {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 46px;
+  height: 120px;
+  background: linear-gradient(180deg, rgba(55, 55, 55, 0.8), rgba(21, 22, 24, 0.9));
+  border-top: 3px solid rgba(255, 224, 137, 0.6);
+  border-bottom: 3px solid rgba(255, 224, 137, 0.6);
+}
+
+.house-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  gap: 8px;
+}
+
+.house-node span {
+  font-size: 1.75rem;
+}
+
+.house-node small {
+  color: #fce7ff;
+  font-size: 0.62rem;
+  background: rgba(12, 8, 16, 0.4);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.house-node.claimed {
+  opacity: 0.7;
+}
+
+.cat-player {
+  position: absolute;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(22, 15, 32, 0.78);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.35);
+}
+
+.cat-player span {
+  font-size: 2.1rem;
+}
+
+.game-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.game-actions p {
+  color: #f7d3ff;
+  margin: 0;
+  max-width: 460px;
+  line-height: 1.5;
+}
+
+.chat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-bubble {
+  background: rgba(8, 10, 22, 0.55);
+  border-radius: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-user {
+  display: inline-block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  color: #ffcf80;
+}
+
+.chat-bubble p {
+  margin: 0;
+  color: #f7e8ff;
+  line-height: 1.5;
+}
+
+.chat-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.chat-summary div {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-summary span {
+  color: #ffc680;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chat-summary strong {
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 860px) {
+  .auth-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .route-summary,
+  .game-metrics,
+  .chat-summary,
+  .neighborhood-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-header,
+  .confirm-row,
+  .game-actions,
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .app-shell {
+    padding-inline: 16px;
+  }
+}
