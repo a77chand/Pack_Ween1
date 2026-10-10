@@ -308,7 +308,16 @@ function showAllCandy() {
 }
 
 // Show candy on the map right away, before Start
-api("/houses").then((list) => { if (runId) return; houses = list; drawHouses(); showAllCandy(); }).catch(() => {});
+(async () => {
+  try {
+    const pos = await getLocation();
+    const list = pos ? await ensureHousesNear(pos) : await api("/houses");
+    if (runId) return;
+    houses = list;
+    drawHouses();
+    showAllCandy();
+  } catch (e) { /* server waking up; Start will retry */ }
+})();
 
 // ---------- Start ----------
 $("go").onclick = async () => {
