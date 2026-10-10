@@ -91,8 +91,10 @@ docs/
 
 Built at ElleHacks by a team of four.
 
-- Anusha Chandra: backend API and game
-<!-- Add your teammates here, e.g. "- Name: what they worked on" -->
+- Anusha Chandra: backend
+- Homaira Hotak: backend
+- Urooj Ahmed: frontend
+- Sofia Pimenovsky: frontend
 
 ## Credits
 
