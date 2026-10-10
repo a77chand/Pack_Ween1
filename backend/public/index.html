@@ -85,7 +85,8 @@
   #legend b { color: #ff7518; }
   #bar { background: linear-gradient(0deg, rgba(13, 6, 18, .96), rgba(26, 11, 38, .9)); border-top: 2px solid #ff7518; }
   #findBtn { color: #7cff4f; border-color: #7cff4f; }
-  #pad button { background: rgba(26, 11, 38, .92); border: 1px solid #ff7518; color: #ff7518; }
+  #pad { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); z-index: 600; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); }
+  #pad button { background: #ff7518; color: #1a0700; border: 2px solid #ffc93c; font-size: 22px; box-shadow: 0 0 12px rgba(255, 117, 24, .8); }
   #chat { background: #1a0b26; border-color: #ff7518; box-shadow: 0 0 24px rgba(139, 61, 255, .45); }
   .chat-head { background: linear-gradient(90deg, #3b0a57, #1f0d2e); color: #ff7518; }
   .msg { background: #2a1240; }
@@ -275,6 +276,7 @@ function startGhosts() {
 function getLocation() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);
+    setTimeout(() => resolve(null), 8000); // don't wait forever if the location pop-up is ignored
     navigator.geolocation.getCurrentPosition(
       (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
       () => resolve(null),
@@ -347,7 +349,13 @@ function setPos(lat, lng) {
 }
 
 function move(dir) {
-  if (!me || ended || useGps) return;
+  if (!me || ended) return;
+  if (useGps) {
+    // Arrows take over from GPS (handy indoors where GPS is weak)
+    useGps = false;
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    toast("🕹️ Switched to arrow controls");
+  }
   const [dn, de, rot] = { up: [STEP, 0, 270], down: [-STEP, 0, 90], left: [0, -STEP, 180], right: [0, STEP, 0] }[dir];
   heading = rot;
   setPos(me.lat + dn / 111320, me.lng + de / (111320 * Math.cos((me.lat * Math.PI) / 180)));
@@ -479,23 +487,23 @@ $("go").onclick = async () => {
     $("time").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   }, 1000);
 
+  // Arrows always show; in GPS mode pressing one switches to arrow control
+  $("pad").hidden = false;
+  // Start where the player is, or in the middle of the neighbourhood
+  const mid = (k) => houses.reduce((a, h) => a + h[k], 0) / houses.length;
+  const lat = startPos ? startPos.lat : houses.length ? mid("lat") : 43.4723;
+  const lng = startPos ? startPos.lng : houses.length ? mid("lng") : -80.5449;
+  setPos(lat, lng);
+  showAllCandy();
   if (useGps && navigator.geolocation) {
-    toast("📍 Finding you…");
-    if (startPos) setPos(startPos.lat, startPos.lng);
-    showAllCandy();
+    toast("📍 Following your GPS. Press an arrow to move manually.");
     watchId = navigator.geolocation.watchPosition(
-      (p) => setPos(p.coords.latitude, p.coords.longitude),
+      (p) => useGps && setPos(p.coords.latitude, p.coords.longitude),
       (err) => toast("GPS error: " + err.message),
       { enableHighAccuracy: true, maximumAge: 2000 }
     );
   } else {
     useGps = false;
-    $("pad").hidden = false;
-    // Start where the player is, or in the middle of the neighbourhood
-    const lat = startPos ? startPos.lat : houses.reduce((a, h) => a + h.lat, 0) / houses.length;
-    const lng = startPos ? startPos.lng : houses.reduce((a, h) => a + h.lng, 0) / houses.length;
-    setPos(lat, lng);
-    showAllCandy();
     toast("Use the arrows to walk to the 🍬 houses!");
   }
 };
