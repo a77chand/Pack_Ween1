@@ -13,7 +13,7 @@
   button { font: inherit; cursor: pointer; border: 0; border-radius: 12px; padding: 10px 14px; background: #2d1b4e; color: #fff; }
   button:hover { filter: brightness(1.15); }
   input, select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #5b3d8a; background: #1e1233; color: #fff; width: 100%; }
-  .screen { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 4, 20, .82); }
+  .screen { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 4, 20, .45); }
   .card { width: 100%; max-width: 380px; background: #1b0f2e; border: 2px solid #ff7a00; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 40px rgba(255, 122, 0, .35); }
   .card h1 { margin: 0; font-size: 32px; color: #ffb300; text-align: center; }
   .card h2 { margin: 0; color: #ffb300; text-align: center; }
@@ -94,6 +94,7 @@
 </div>
 
 <div id="bar" hidden>
+  <button id="findBtn">🍬 Find candy</button>
   <button id="routeBtn">🧭 Route</button>
   <button id="chatBtn">💬 Chat</button>
   <button id="endBtn" class="end">🏁 End session</button>
@@ -180,7 +181,7 @@ function drawDecorHouses() {
       if (rand() < 0.35) continue;
       const [lat, lng] = offset(lat0, lng0, n + (rand() - 0.5) * 10, e + (rand() - 0.5) * 10);
       if (houses.some((h) => distanceMeters(lat, lng, h.lat, h.lng) < 22)) continue;
-      L.marker([lat, lng], { icon: decorIcon, interactive: false }).addTo(map);
+      L.marker([lat, lng], { icon: decorIcon, interactive: false }).addTo(houseLayer);
     }
   }
 }
@@ -231,10 +232,12 @@ async function ensureHousesNear(pos) {
 }
 const pacIcon = L.divIcon({ className: "", html: '<div class="pac-wrap"><div class="pac"></div></div>', iconSize: [30, 30], iconAnchor: [15, 15] });
 
+const houseLayer = L.layerGroup().addTo(map);
 function drawHouses() {
+  houseLayer.clearLayers();
   for (const h of houses) {
-    L.circle([h.lat, h.lng], { radius: RADIUS, color: "#ff7a00", weight: 1, fillOpacity: 0.08 }).addTo(map);
-    markers[h.id] = L.marker([h.lat, h.lng], { icon: candyIcon(false) }).addTo(map).bindTooltip(h.name);
+    L.circle([h.lat, h.lng], { radius: RADIUS, color: "#ff7a00", weight: 1, fillOpacity: 0.08 }).addTo(houseLayer);
+    markers[h.id] = L.marker([h.lat, h.lng], { icon: candyIcon(collected.has(h.id)) }).addTo(houseLayer).bindTooltip(h.name);
   }
   $("total").textContent = houses.length;
   drawDecorHouses();
@@ -249,7 +252,8 @@ function setPos(lat, lng) {
   else meMarker.setLatLng([lat, lng]);
   const pac = meMarker.getElement() && meMarker.getElement().querySelector(".pac");
   if (pac) pac.style.transform = `rotate(${heading}deg)`;
-  map.panTo([lat, lng], { animate: true });
+  // only scroll the map when Pac-Man gets near the edge
+  if (!map.getBounds().pad(-0.2).contains([lat, lng])) map.panTo([lat, lng], { animate: true });
   checkHouses();
 }
 
@@ -291,10 +295,20 @@ async function showRoute() {
     toast(r.stops.length ? `🧭 Best route: ${r.totalMeters} m to all ${r.stops.length} houses` : "No houses left!");
   } catch (e) { toast(e.message); }
 }
+$("findBtn").onclick = showAllCandy;
 $("routeBtn").onclick = () => {
   if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
   else showRoute();
 };
+
+function showAllCandy() {
+  const pts = houses.map((h) => [h.lat, h.lng]);
+  if (me) pts.push([me.lat, me.lng]);
+  if (pts.length) map.fitBounds(pts, { padding: [70, 70], maxZoom: 18 });
+}
+
+// Show candy on the map right away, before Start
+api("/houses").then((list) => { if (runId) return; houses = list; drawHouses(); showAllCandy(); }).catch(() => {});
 
 // ---------- Start ----------
 $("go").onclick = async () => {
@@ -324,6 +338,7 @@ $("go").onclick = async () => {
   }
   drawHouses();
   $("start").hidden = true;
+  map.invalidateSize();
   $("hud").hidden = false;
   $("bar").hidden = false;
   startedAt = Date.now();
@@ -335,6 +350,7 @@ $("go").onclick = async () => {
   if (useGps && navigator.geolocation) {
     toast("📍 Finding you…");
     if (startPos) setPos(startPos.lat, startPos.lng);
+    showAllCandy();
     watchId = navigator.geolocation.watchPosition(
       (p) => setPos(p.coords.latitude, p.coords.longitude),
       (err) => toast("GPS error: " + err.message),
@@ -347,7 +363,7 @@ $("go").onclick = async () => {
     const lat = startPos ? startPos.lat : houses.reduce((a, h) => a + h.lat, 0) / houses.length;
     const lng = startPos ? startPos.lng : houses.reduce((a, h) => a + h.lng, 0) / houses.length;
     setPos(lat, lng);
-    map.setView([lat, lng], 17);
+    showAllCandy();
     toast("Use the arrows to walk to the 🍬 houses!");
   }
 };
