@@ -346,7 +346,24 @@ async function showRoute() {
     toast(r.stops.length ? `🧭 Best route: ${r.totalMeters} m to all ${r.stops.length} houses` : "No houses left!");
   } catch (e) { toast(e.message); }
 }
-$("findBtn").onclick = showAllCandy;
+// Fly to the nearest candy not collected yet and point at it
+let findLine = null;
+$("findBtn").onclick = () => {
+  if (!me) return showAllCandy();
+  let best = null, bestD = Infinity;
+  for (const h of houses) {
+    if (collected.has(h.id)) continue;
+    const d = distanceMeters(me.lat, me.lng, h.lat, h.lng);
+    if (d < bestD) { best = h; bestD = d; }
+  }
+  if (!best) return toast("🎉 You already collected all the candy!");
+  if (findLine) map.removeLayer(findLine);
+  findLine = L.polyline([[me.lat, me.lng], [best.lat, best.lng]], { color: "#ff4fd8", weight: 4, dashArray: "8 8" }).addTo(map);
+  map.flyToBounds([[me.lat, me.lng], [best.lat, best.lng]], { padding: [90, 90], maxZoom: 19, duration: 0.8 });
+  markers[best.id].openTooltip();
+  toast(`🍬 Nearest candy: ${best.name}, ${Math.round(bestD)} m away. Follow the pink line!`);
+  setTimeout(() => { if (findLine) { map.removeLayer(findLine); findLine = null; } }, 6000);
+};
 $("routeBtn").onclick = () => {
   if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
   else showRoute();
