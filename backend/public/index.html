@@ -180,8 +180,8 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
 
 // ---------- Map ----------
 const map = L.map("map", { zoomControl: false }).setView([43.4723, -80.5449], 17);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-  maxZoom: 20, subdomains: "abcd", attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
 }).addTo(map);
 
 const candyIcon = (done) => L.divIcon({ className: "", html: `<div class="house${done ? " done" : ""}"><span>🏠</span><span class="c">🍬</span></div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
@@ -358,7 +358,7 @@ $("findBtn").onclick = () => {
   if (!best) return toast("🎉 You already collected all the candy!");
   if (findLine) map.removeLayer(findLine);
   findLine = L.polyline([[me.lat, me.lng], [best.lat, best.lng]], { color: "#ff4fd8", weight: 4, dashArray: "8 8" }).addTo(map);
-  map.flyToBounds([[me.lat, me.lng], [best.lat, best.lng]], { padding: [90, 90], maxZoom: 19, duration: 0.8 });
+  map.flyToBounds([[me.lat, me.lng], [best.lat, best.lng]], { padding: [90, 90], maxZoom: 18, duration: 0.8 });
   markers[best.id].openTooltip();
   toast(`🍬 Nearest candy: ${best.name}, ${Math.round(bestD)} m away. Follow the pink line!`);
   setTimeout(() => { if (findLine) { map.removeLayer(findLine); findLine = null; } }, 6000);
