@@ -67,18 +67,56 @@
   @keyframes bob { to { transform: translateY(-4px) scale(1.1); } }
   .candy { font-size: 28px; line-height: 1; filter: drop-shadow(0 0 4px #ff7a00); }
   .candy.done { opacity: .45; filter: grayscale(1); }
+
+  /* ===== Halloween theme (colours only) ===== */
+  html, body { background: #0d0612; overflow: hidden; }
+  button { background: #2a1240; border: 1px solid #4a2370; }
+  input, select { border-color: #8b3dff; background: #160a22; }
+  .screen { background: radial-gradient(ellipse at center, rgba(40, 10, 60, .3), rgba(8, 2, 12, .7)); }
+  .card { background: linear-gradient(180deg, #1f0d2e, #12071b); border: 2px solid #ff7518; box-shadow: 0 0 30px rgba(255, 117, 24, .45), 0 0 80px rgba(139, 61, 255, .35); }
+  .card h1, .card h2 { color: #ff7518; text-shadow: 0 0 10px rgba(255, 117, 24, .7), 3px 3px 0 #3b0a57; }
+  .card p, .card label, .how { color: #e8d9f5; }
+  .card h3 { color: #7cff4f; }
+  .primary, #bar .end, #chatForm button { background: linear-gradient(180deg, #ff9a3c, #ff7518); color: #1a0700; border: 0; }
+  #bar .end.sure { background: #d7263d; color: #fff; }
+  #hud { background: rgba(13, 6, 18, .92); color: #ffc93c; border-color: #ff7518; box-shadow: 0 0 14px rgba(255, 117, 24, .7); }
+  #next { color: #7cff4f; }
+  #legend { background: rgba(26, 11, 38, .92); border-color: #8b3dff; box-shadow: 0 0 12px rgba(139, 61, 255, .5); }
+  #legend b { color: #ff7518; }
+  #bar { background: linear-gradient(0deg, rgba(13, 6, 18, .96), rgba(26, 11, 38, .9)); border-top: 2px solid #ff7518; }
+  #findBtn { color: #7cff4f; border-color: #7cff4f; }
+  #pad button { background: rgba(26, 11, 38, .92); border: 1px solid #ff7518; color: #ff7518; }
+  #chat { background: #1a0b26; border-color: #ff7518; box-shadow: 0 0 24px rgba(139, 61, 255, .45); }
+  .chat-head { background: linear-gradient(90deg, #3b0a57, #1f0d2e); color: #ff7518; }
+  .msg { background: #2a1240; }
+  .msg b, #board li.me { color: #ff7518; }
+  #toast { background: #ff7518; color: #1a0700; box-shadow: 0 0 16px rgba(255, 117, 24, .7); }
+  .pac { background: conic-gradient(from 120deg, #ff7518 0 300deg, transparent 300deg 360deg); filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 8px #ff7518); }
+  @keyframes chomp { to { background: conic-gradient(from 100deg, #ff7518 0 340deg, transparent 340deg 360deg); } }
+  .house .c { filter: drop-shadow(0 0 6px #ff7518); }
+  .ghost { filter: drop-shadow(0 0 7px #7cff4f); }
+  .leaflet-container { background: #1a0b26; }
+  /* spooky edge + bats: sit above the map but never block clicks */
+  #spooky { position: fixed; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(30, 5, 45, .55) 100%), rgba(255, 117, 24, .05); }
+  .bat { position: fixed; z-index: 3; pointer-events: none; left: -40px; top: 18%; font-size: 22px; animation: fly 14s linear infinite; }
+  .bat.b2 { top: 38%; font-size: 16px; animation-duration: 19s; animation-delay: -6s; }
+  .bat.b3 { top: 64%; font-size: 26px; animation-duration: 23s; animation-delay: -12s; }
+  @keyframes fly { 25% { transform: translate(27vw, -30px); } 50% { transform: translate(55vw, 20px); } 75% { transform: translate(80vw, -25px); } 100% { transform: translate(calc(100vw + 80px), 0); } }
+
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div id="map"></div>
+<div id="spooky" aria-hidden="true"></div>
+<div class="bat" aria-hidden="true">🦇</div><div class="bat b2" aria-hidden="true">🦇</div><div class="bat b3" aria-hidden="true">🦇</div>
 
 <div id="start" class="screen">
   <div class="card">
     <h1>🎃 Pack_Ween</h1>
     <p>Trick-or-treat like Pac-Man! Walk up to a house to grab its candy. Most candy in the fastest time wins.</p>
     <ol class="how">
-      <li>🟡 You are Pac-Man on a real map of your neighbourhood.</li>
+      <li>🟠 You are a pumpkin Pac-Man on a real map of your neighbourhood.</li>
       <li>🏠🍬 Houses with candy are volunteers handing out treats. Plain 🏠 have none.</li>
       <li>Get within <b>25 m</b> of a candy house and the candy is claimed automatically.</li>
       <li>🧭 Route shows the shortest path (Pac-dots) to every candy house.</li>
@@ -100,12 +138,12 @@
 
 <div id="legend" hidden>
   <b>LEGEND</b><br>
-  🟡 You (Pac-Man)<br>
+  🟠 You (Pac-Man)<br>
   🏠🍬 Candy house<br>
   🏠 No candy<br>
   ⭕ 25 m claim zone<br>
   👻 Ghosts (just spooky)<br>
-  <span style="color:#ffd400">• • •</span> Route to candy
+  <span style="color:#ff7518">• • •</span> Route to candy
 </div>
 
 <div id="pad" hidden>
@@ -290,7 +328,7 @@ const houseLayer = L.layerGroup().addTo(map);
 function drawHouses() {
   houseLayer.clearLayers();
   for (const h of houses) {
-    L.circle([h.lat, h.lng], { radius: RADIUS, color: "#ff7a00", weight: 1, fillOpacity: 0.08 }).addTo(houseLayer);
+    L.circle([h.lat, h.lng], { radius: RADIUS, color: "#ff7518", fillColor: "#8b3dff", weight: 2, fillOpacity: 0.15 }).addTo(houseLayer);
     markers[h.id] = L.marker([h.lat, h.lng], { icon: candyIcon(collected.has(h.id)) }).addTo(houseLayer).bindTooltip(h.name);
   }
   $("total").textContent = houses.length;
@@ -360,7 +398,7 @@ async function showRoute() {
   try {
     const r = await api(`/route?lat=${me.lat}&lng=${me.lng}&runId=${runId}`);
     if (routeLine) map.removeLayer(routeLine);
-    routeLine = L.polyline([[me.lat, me.lng], ...r.stops.map((s) => [s.lat, s.lng])], { color: "#ffd400", weight: 7, dashArray: "1 14", lineCap: "round" }).addTo(map);
+    routeLine = L.polyline([[me.lat, me.lng], ...r.stops.map((s) => [s.lat, s.lng])], { color: "#ff7518", weight: 7, dashArray: "1 14", lineCap: "round" }).addTo(map);
     toast(r.stops.length ? `🧭 Best route: ${r.totalMeters} m to all ${r.stops.length} houses` : "No houses left!");
   } catch (e) { toast(e.message); }
 }
@@ -376,7 +414,7 @@ $("findBtn").onclick = () => {
   }
   if (!best) return toast("🎉 You already collected all the candy!");
   if (findLine) map.removeLayer(findLine);
-  findLine = L.polyline([[me.lat, me.lng], [best.lat, best.lng]], { color: "#ff4fd8", weight: 4, dashArray: "8 8" }).addTo(map);
+  findLine = L.polyline([[me.lat, me.lng], [best.lat, best.lng]], { color: "#7cff4f", weight: 4, dashArray: "8 8" }).addTo(map);
   map.flyToBounds([[me.lat, me.lng], [best.lat, best.lng]], { padding: [90, 90], maxZoom: 18, duration: 0.8 });
   markers[best.id].openTooltip();
   toast(`🍬 Nearest candy: ${best.name}, ${Math.round(bestD)} m away. Follow the pink line!`);
