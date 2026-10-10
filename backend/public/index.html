@@ -245,6 +245,16 @@ const DEMO_SPOTS = [
   [65, -5, "Ghost Garden"], [-10, 70, "Candy Castle"], [95, 55, "Cauldron Corner"], [-85, -70, "Skeleton Shack"],
   [-110, 40, "Vampire Villa"], [80, -95, "Mummy Manor"], [15, 120, "Haunted Hut"], [-60, 115, "Zombie Lane"],
 ];
+// Without the player's location, keep only the biggest group of houses (never zoom out to the whole province)
+function biggestCluster(list) {
+  let best = list, bestCount = 0;
+  for (const h of list) {
+    const group = list.filter((o) => distanceMeters(h.lat, h.lng, o.lat, o.lng) <= 600);
+    if (group.length > bestCount) { best = group; bestCount = group.length; }
+  }
+  return best;
+}
+
 // Run the demo setup only once even if load and Start both ask for it
 let ensurePromise = null;
 function ensureOnce(pos) {
@@ -378,7 +388,7 @@ function showAllCandy() {
 (async () => {
   try {
     const pos = await getLocation();
-    const list = pos ? await ensureOnce(pos) : await api("/houses");
+    const list = pos ? await ensureOnce(pos) : biggestCluster(await api("/houses"));
     if (runId) return;
     houses = list;
     drawHouses();
@@ -402,7 +412,8 @@ $("go").onclick = async () => {
       houses = await ensureOnce(pos);
       startPos = pos;
     } else {
-      houses = await api("/houses");
+      houses = biggestCluster(await api("/houses"));
+      toast("📍 Location is off, so showing the demo neighbourhood");
     }
     const r = await api("/runs/start", { player, zone });
     runId = r.runId;
