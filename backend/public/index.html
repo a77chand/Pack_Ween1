@@ -96,12 +96,10 @@
   .house .c { filter: drop-shadow(0 0 6px #ff7518); }
   .ghost { filter: drop-shadow(0 0 7px #7cff4f); }
   .leaflet-container { background: #1a0b26; }
-  /* spooky edge + bats: sit above the map but never block clicks */
+  /* spooky edge: sits above the map but never blocks clicks */
   #spooky { position: fixed; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(30, 5, 45, .55) 100%), rgba(255, 117, 24, .05); }
-  .bat { position: fixed; z-index: 3; pointer-events: none; left: -40px; top: 18%; font-size: 22px; animation: fly 14s linear infinite; }
-  .bat.b2 { top: 38%; font-size: 16px; animation-duration: 19s; animation-delay: -6s; }
-  .bat.b3 { top: 64%; font-size: 26px; animation-duration: 23s; animation-delay: -12s; }
-  @keyframes fly { 25% { transform: translate(27vw, -30px); } 50% { transform: translate(55vw, 20px); } 75% { transform: translate(80vw, -25px); } 100% { transform: translate(calc(100vw + 80px), 0); } }
+  /* dark-mode map: only recolours the street tiles, map data is unchanged */
+  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(1.25) contrast(1.15) saturate(.7); }
 
   [hidden] { display: none !important; }
 </style>
@@ -109,7 +107,6 @@
 <body>
 <div id="map"></div>
 <div id="spooky" aria-hidden="true"></div>
-<div class="bat" aria-hidden="true">🦇</div><div class="bat b2" aria-hidden="true">🦇</div><div class="bat b3" aria-hidden="true">🦇</div>
 
 <div id="start" class="screen">
   <div class="card">
