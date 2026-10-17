@@ -1,0 +1,10 @@
+# One-click deploy on Render: Dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: pack-ween
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
