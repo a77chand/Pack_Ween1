@@ -3,6 +3,9 @@
 **Pac-Man on your real streets.** Trick-or-treat around your actual neighbourhood, collect candy from volunteer houses, dodge ghosts that hunt you through the streets, and race your neighbours up the leaderboard.
 
 **▶ Play it live: https://pack-ween.onrender.com**
+
+**Demo login:** name `Demo`, PIN `1234` (or tap *"Just looking? Use the demo account"* on the start screen).
+
 <sub>Hosted on Render's free tier and kept awake by a scheduled ping, so it should load straight away. If it ever does sleep, the first load takes 20–60 seconds.</sub>
 
 ![Pack_Ween gameplay: a pumpkin Pac-Man on a dark street map, candy houses with claim rings, four coloured ghosts and a trail of Pac-dots along the streets](docs/screenshot.jpg)
@@ -11,18 +14,16 @@
 
 The streets around you become a Pac-Man maze. The game downloads your neighbourhood's real street network from OpenStreetMap and turns it into a graph: in **Arcade** mode Pac-Man runs along the actual roads and footpaths, turning at real intersections. Houses handing out candy show up as 🏠🍬. Get within **25 m** of one and the server checks your position before the candy counts.
 
-Four ghosts chase you along the same streets. Each has its own Pac-Man personality, and they switch between scattering to their corners and hunting you. A 🍫 **full-size-bar house** is a power-up: the ghosts turn purple and run, and you can eat them.
-
 Play it two ways:
 
-- 🕹️ **Arcade:** arrow keys, WASD or the on-screen D-pad, from anywhere.
-- 🚶 **Walk · Ranked:** your real GPS. You physically walk to the houses, and the run goes on a separate ranked leaderboard that the server protects with speed checks.
+- 🕹️ **Arcade · At home:** join the fun from home with the arrow keys, WASD or the on-screen D-pad, and race other at-home players. Four ghosts chase you along the streets, each with its own Pac-Man personality, switching between scattering to their corners and hunting you. A 🍫 **full-size-bar house** is a power-up: the ghosts turn purple and run, and you can eat them.
+- 🚶 **Walk · Ranked:** your real GPS. You physically walk to the houses, and the run goes on a separate ranked leaderboard that the server protects with speed checks. Nothing can really catch you outside, so here the ghosts are harmless and just drift around for atmosphere.
 
 ## Features
 
 - 🗺️ **Real streets as the maze.** Streets and footpaths from OpenStreetMap are compacted into a graph (largest connected piece only, straight stretches simplified). Every candy house gets a "driveway" onto it, so every house is reachable.
-- 👻 **Ghost AI.** Banshee chases you directly, Ghoul cuts you off ahead, Sheet flanks you with Banshee, and Spook loses its nerve up close. At each junction a ghost takes the street that is shortest to its target, using a Dijkstra distance field refreshed a few times a second. It never turns back except at a dead end.
-- 🍫 **Power-ups.** Full-size-bar houses frighten the ghosts; eat one for **−5 s**. A ghost that catches you costs **+10 s**.
+- 👻 **Ghost AI (Arcade).** Banshee chases you directly, Ghoul cuts you off ahead, Sheet flanks you with Banshee, and Spook loses its nerve up close. At each junction a ghost takes the street that is shortest to its target, using a Dijkstra distance field refreshed a few times a second. It never turns back except at a dead end.
+- 🍫 **Power-ups.** Full-size-bar houses frighten the ghosts; eat one for **−5 s**. In Arcade, a ghost that catches you costs **+10 s**.
 - 🧭 **Route planner.** It finds the shortest street distance between every pair of houses, starts from a nearest-neighbour route, then improves it with 2-opt. The result is drawn as Pac-dots along the streets, and you eat them as you go.
 - 🛡️ **Anti-cheat.** The server tracks a movement budget for each run that refills at walking or running speed. Teleporting or driving earns strikes and pauses candy claims, and five strikes flag the run so it stays off the leaderboard.
 - 👤 **Accounts with a name and PIN.** Names are unique and protected. PINs are hashed with scrypt, and wrong PINs are rate-limited.
@@ -31,15 +32,22 @@ Play it two ways:
 - 💾 **Saved in SQLite.** Accounts, runs, houses and chat are kept in Node's built-in `node:sqlite`, so there's nothing extra to install.
 - ↩️ **Resume.** Reload or lose signal mid-run and you can pick up where you left off.
 - 💬 **Neighbourhood chat** for messages within 5 km, with an unread badge.
+- 🎃 **Demo players.** A display-only cast of demo trick-or-treaters makes sure there's always someone around:
+  - they appear on every leaderboard with beatable scores,
+  - they chat in the background and reply to whatever you say,
+  - they run the streets on the map as other Pac-Men,
+  - they fill the "out near you" feed on the start screen, mixed with real players' finishes.
+
+  They're generated, never stored (apart from chat replies), and labelled "demo" in the chat and the leaderboard.
 - 🔊 **Retro sound effects** synthesised with the Web Audio API, plus vibration on phones and a screen wake lock while you walk.
 
 ## How to play
 
 1. Open **https://pack-ween.onrender.com** and allow location access. Without it you get the demo neighbourhood in Waterloo.
-2. Enter a name and a 4-digit PIN. A new name is claimed for you, and returning players use the same PIN.
-3. Pick **Arcade** or **Walk · Ranked**, then **Start trick-or-treating**.
+2. Sign in as **Demo / 1234**, or enter your own name and any 4-digit PIN. A new name is claimed for you, the PIN keeps it yours on the leaderboard, and returning players use the same PIN.
+3. Pick **Arcade · At home** or **Walk · Ranked**, then **Start trick-or-treating**.
 4. Collect every 🏠🍬. **🍬 Find** draws a green line to the nearest one and **🧭 Route** lays Pac-dots through all of them.
-5. Grab a 🍫 house to turn the tables on the ghosts.
+5. In Arcade, grab a 🍫 house to turn the tables on the ghosts.
 6. Collect everything, or tap **🏁 End**, to see your stats and the leaderboard. Share your score or chat with neighbours.
 
 To hand out candy, tap **🏠 Hand out candy** on the start screen while standing at your door.
@@ -65,7 +73,7 @@ Needs [Node.js](https://nodejs.org/) 22.13 or newer.
 cd backend
 npm install
 npm start        # http://localhost:4000
-npm test         # 14 tests
+npm test         # 20 tests
 ```
 
 | Environment variable | Default | What it does |
@@ -73,6 +81,8 @@ npm test         # 14 tests
 | `PORT` | `4000` | Port to listen on |
 | `DATA_DIR` | `backend/data` | Where the SQLite database is kept |
 | `OSM_DISABLED` | unset | Set to `1` to never call Overpass (only baked maps work, other places play in free-roam mode) |
+
+The server creates the shared **Demo** account (PIN `1234`) at startup. Several people can play on it at once without ending each other's runs.
 
 Overpass often takes 20–40 seconds for a new area, so each map is fetched once, cached in SQLite, and the game lets you roam freely until it arrives. The default Waterloo neighbourhood ships pre-baked in `backend/osm/` so it loads instantly. To bake another area: `npm run bake-osm -- <lat> <lng> <name>`.
 
@@ -95,11 +105,12 @@ The backend serves the game and a JSON API. Full request and response examples a
 | GET | `/runs/:id` | Run state, used to resume |
 | POST | `/runs/:id/ping` | Position update for the speed check |
 | POST | `/runs/:id/visit` | Claim a house's candy |
-| POST | `/runs/:id/event` | Caught by a ghost (+10 s) or ate one during a power-up (−5 s) |
+| POST | `/runs/:id/event` | Arcade only: caught by a ghost (+10 s) or ate one during a power-up (−5 s) |
 | POST | `/runs/:id/finish` | End a run |
 | GET | `/leaderboard?scope=&mode=&lat=&lng=` | Best run per player near you |
 | GET | `/route?lat=&lng=&runId=` | Suggested walking order through the remaining houses |
-| GET / POST | `/chat` | Read and post neighbourhood chat |
+| GET / POST | `/chat` | Read and post neighbourhood chat (demo players reply) |
+| GET | `/activity?lat=&lng=` | Who's playing near you and what just happened |
 
 ## Project structure
 
@@ -112,12 +123,14 @@ backend/
     neighbourhood.js    Which houses a run gets; demo houses snapped to real buildings
     osm.js              Overpass fetching, street-graph compaction, caching
     route.js            Nearest-neighbour + 2-opt route planning
+    bots.js             Display-only demo players: leaderboard, chat, activity feed
     db.js               SQLite schema
   public/
     index.html, style.css
     js/main.js          Game flow, HUD, claims, results, chat, hosting
     js/streets.js       Street graph, Dijkstra, the Walker that moves along streets
-    js/ghosts.js        Ghost AI
+    js/ghosts.js        Ghost AI (harmless wanderers in Walk mode)
+    js/rivals.js        Other players' Pac-Men running between the houses
     js/route.js         Street routes and Pac-dots
     js/sound.js         Web Audio sound effects
   osm/waterloo.json     Pre-baked street map for the demo neighbourhood
@@ -135,7 +148,8 @@ The original version listed these as next steps. They're all done now:
 - ~~Location can be faked~~ → **server-side speed checks** with strikes, claim cooldowns and flagged runs.
 - ~~Demo mode is only for trying it out~~ → **Arcade** has its own leaderboard, and **Walk · Ranked** is GPS only.
 - ~~No accounts, houses unverified~~ → **name + PIN accounts**, and houses are **verified by real visits** and can be **reported**.
-- ~~Ghosts are just decoration~~ → ghosts **chase you along the streets** and can be **eaten**.
+- ~~Ghosts are just decoration~~ → in Arcade, ghosts **chase you along the streets** and can be **eaten**. In Walk mode they stay harmless on purpose.
+- ~~Nobody else around~~ → **demo players** on the leaderboard, in the chat and on the map.
 - ~~Leaderboard "zones" were just labels~~ → leaderboards are **geographic**: street, district, city or world.
 - ~~Route went through every house in the database~~ → the route only covers **your run's houses**, **along real streets**.
 
@@ -145,6 +159,8 @@ The original version listed these as next steps. They're all done now:
 - **A new area's street map can take up to a minute** to arrive from Overpass the first time. Until then you can roam freely, and after that it's cached.
 - **Speed checks catch teleporting and driving, not a careful spoofer** who fakes a believable walking path. Ghost encounters are reported by the browser and limited by the server, but not proven.
 - **Demo houses are generated,** so in areas without volunteers they sit on real buildings, but nobody there is actually handing out candy.
+- **Demo players are simulated.** Their scores, chat and map movement are generated for display.
+- **The PIN is light protection.** It stops someone else using your leaderboard name; it isn't meant to guard anything sensitive. The Demo PIN is public on purpose.
 
 ## Team
 

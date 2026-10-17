@@ -19,6 +19,8 @@ All POST bodies are JSON (`Content-Type: application/json`). Errors look like `{
 
 Endpoints marked 🔒 need `Authorization: Bearer <token>`, where the token comes from `POST /players`.
 
+**Demo account:** `server.js` creates `Demo` with PIN `1234` at startup. Wrong guesses never lock it (its PIN is public), and each sign-in keeps its own run, so several visitors can play on it at once.
+
 ### `POST /players`
 Sign up or sign in. A name nobody has used yet is claimed with the PIN you send; after that, the same name needs the same PIN.
 ```json
@@ -29,7 +31,7 @@ Sign up or sign in. A name nobody has used yet is claimed with the PIN you send;
 ```
 - 400: the name must be 2-20 letters, numbers or spaces; the PIN must be 4-8 digits
 - 401: the name is taken and the PIN doesn't match
-- 429: too many attempts (20 a minute per IP; 5 wrong PINs per name in 10 minutes)
+- 429: too many attempts (20 a minute per IP), or 5 wrong PINs for that name in 10 minutes (then even the right PIN waits)
 
 ### `GET /players/me` 🔒
 ```json
@@ -38,7 +40,7 @@ Sign up or sign in. A name nobody has used yet is claimed with the PIN you send;
  "activeRun": {"runId": 7, "mode": "gps", "startTime": 1791661597217},
  "houses": [{"id": 2, "name": "Maple St porch", "lat": 43.47, "lng": -80.54, "fullSize": true}]}
 ```
-`activeRun` is an unfinished run you can resume. Runs left idle for 3 hours are closed automatically.
+`activeRun` is an unfinished run started from this sign-in, which you can resume. Runs left idle for 3 hours are closed automatically.
 
 ## Map data
 
@@ -96,7 +98,7 @@ A house is hidden once it has at least 3 reports and the reports outnumber its c
 ```json
 {"mode": "arcade", "lat": 43.4727, "lng": -80.5455}
 ```
-`mode` is `gps` (Walk · Ranked) or `arcade`. The run's candy houses are fixed at this point and returned with run-local ids. Starting a new run closes any unfinished one.
+`mode` is `gps` (Walk · Ranked) or `arcade`. The run's candy houses are fixed at this point and returned with run-local ids. Starting a new run closes any unfinished run from the same sign-in.
 ```json
 {"runId": 7, "mode": "arcade", "startTime": 1791661597217, "ended": false, "flagged": false, "strikes": 0,
  "penalty": 0, "bonus": 0, "ghosts": 0, "spooks": 0, "last": {"lat": 43.4727, "lng": -80.5455}, "streets": "ready",
@@ -140,7 +142,7 @@ Five strikes flag the run. Flagged runs never appear on leaderboards and don't c
 ```json
 {"type": "spooked"}
 ```
-`spooked` means a ghost caught you: +10 seconds. `ghost` means you ate a ghost: −5 seconds. Eating only counts within the power-up window after claiming a full-size-bar house (11 s arcade, 35 s walking), and only up to 4 ghosts per power-up. Returns `{"penalty": 10, "bonus": 5}`.
+Arcade only: Walk-mode ghosts are harmless, so Walk runs get 400. `spooked` means a ghost caught you: +10 seconds. `ghost` means you ate a ghost: −5 seconds. Eating only counts within the power-up window after claiming a full-size-bar house (11 s arcade, 35 s walking), and only up to 4 ghosts per power-up. Returns `{"penalty": 10, "bonus": 5}`.
 
 ### `POST /runs/:id/finish` 🔒
 ```json
@@ -160,6 +162,8 @@ Five strikes flag the run. Flagged runs never appear on leaderboards and don't c
 ```
 `me` is your own entry (send your token), even when you're outside the top 20.
 
+Demo players are mixed in, marked `"bot": true`. There are 4, 6, 8 or 10 of them depending on the scope, with beatable scores that stay the same for a day in each area. `bots` in the response says how many there are.
+
 ### `GET /route?lat=&lng=&runId=`
 Walking order through a run's unvisited houses (or the neighbourhood's houses without `runId`): nearest-neighbour, then 2-opt. Straight-line distances; the game redoes this along streets.
 ```json
@@ -167,16 +171,26 @@ Walking order through a run's unvisited houses (or the neighbourhood's houses wi
 ```
 
 ### `GET /chat?lat=&lng=`
-Last 50 messages posted within 5 km (or anywhere, without `lat`/`lng`).
+Last 50 messages posted within 5 km (or anywhere, without `lat`/`lng`), mixed with background chatter from demo players (about one message every few minutes over the last hour, generated rather than stored, with negative ids).
 ```json
-[{"id": 1, "player": "Milo Moon", "text": "Vampire Villa has full-size bars!", "time": 1791664053703}]
+[{"id": 1, "player": "Milo Moon", "text": "Vampire Villa has full-size bars!", "time": 1791664053703, "bot": false}]
 ```
 
 ### `POST /chat` 🔒
 ```json
 {"text": "Hi!", "lat": 43.4723, "lng": -80.5449}
 ```
-`text` is required (max 300 characters). One message per 1.5 s per player.
+`text` is required (max 300 characters). One message per 1.5 s per player. A demo player replies 2-6 seconds later, picking an answer from simple keyword rules about candy, ghosts, routes, scores or Walk mode.
+
+### `GET /activity?lat=&lng=`
+Who's out near a point right now, for the start screen and the other Pac-Men on the map.
+```json
+{"playing": 6,
+ "players": [{"name": "WitchyWin", "color": "#b48cff"}],
+ "feed": [{"text": "WitchyWin grabbed candy at Vampire Villa", "time": 1791664053703, "bot": true},
+          {"text": "Milo Moon finished with 12 🍬 in 2:26", "time": 1791663900000, "bot": false}]}
+```
+`playing` counts real runs pinged in the last 2 minutes within 3 km, plus the demo players. `feed` mixes real finishes from the last hour with demo events, newest first.
 
 ### Unknown routes
 404 `{"error": "not found"}`
