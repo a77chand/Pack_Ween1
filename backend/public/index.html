@@ -39,20 +39,27 @@
         <input id="name" placeholder="Your name" maxlength="20" autocomplete="nickname" aria-label="Your name">
         <input id="pin" class="pin" placeholder="PIN" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" aria-label="PIN, 4 to 8 digits">
       </div>
-      <p class="hint">New name? Pick any 4-digit PIN to claim it. Back again? Use the same PIN.</p>
+      <p class="hint">New name? Pick any 4-digit PIN to claim it. Back again? Use the same PIN.<br>
+        <button id="demoBtn" class="link" type="button">Just looking? Use the demo account</button></p>
     </form>
 
     <div class="modes" role="radiogroup" aria-label="Game mode">
       <button class="mode" type="button" role="radio" data-mode="arcade" aria-checked="true">
-        <span class="mode-icon" aria-hidden="true">🕹️</span><b>Arcade</b><small>Arrow keys or D-pad. Play from anywhere.</small>
+        <span class="mode-icon" aria-hidden="true">🕹️</span><b>Arcade · At home</b><small>Join the fun from home! Dodge the ghosts and race other at-home players.</small>
       </button>
       <button class="mode" type="button" role="radio" data-mode="gps" aria-checked="false">
-        <span class="mode-icon" aria-hidden="true">🚶</span><b>Walk · Ranked</b><small>Real GPS. Walk up to the houses.</small>
+        <span class="mode-icon" aria-hidden="true">🚶</span><b>Walk · Ranked</b><small>Real GPS trick-or-treating. Ghosts just float by for spooky vibes.</small>
       </button>
     </div>
 
     <button id="go" class="primary big">Start trick-or-treating</button>
     <div id="hoodStatus" class="status" aria-live="polite">📍 Finding your neighbourhood…</div>
+
+    <div id="live" class="live" hidden>
+      <div class="live-head"><span class="live-dot" aria-hidden="true"></span><b id="liveCount">0</b> trick-or-treaters out near you</div>
+      <ul id="liveFeed"></ul>
+      <div class="live-note">Includes demo players</div>
+    </div>
 
     <div class="row">
       <button id="boardBtn" type="button">🏆 Leaderboard</button>
@@ -65,7 +72,7 @@
         <li><b class="o">You're the pumpkin Pac-Man</b> on a real map. In Arcade you run along the actual streets like a maze.</li>
         <li>🏠🍬 houses are volunteers handing out candy. Get within <b>25 m</b> and it's yours.</li>
         <li>🍫 <b class="g">Full-size bar houses are power-ups:</b> the ghosts turn purple and run. Eat one for <b>−5 s</b>.</li>
-        <li>👻 A ghost that catches you costs <b>+10 s</b>. Most candy wins; time breaks ties.</li>
+        <li>👻 In Arcade, a ghost that catches you costs <b>+10 s</b>. In Walk mode they're harmless and just drift around for atmosphere. Most candy wins; time breaks ties.</li>
         <li>🧭 <b>Route</b> lays Pac-dots along the shortest walk through every house.</li>
         <li><b>Walk · Ranked</b> uses your real GPS and gets its own leaderboard. The server checks your speed, so no cars or teleporting.</li>
       </ol>
@@ -96,7 +103,8 @@
   <div>🏠🍫 Full-size bars: power-up</div>
   <div><span class="lg-check">✓</span> Verified by 3+ trick-or-treaters</div>
   <div><span class="lg-ring"></span> 25 m claim zone</div>
-  <div><span class="lg-ghost" style="--c:#ff3b5c"></span><span class="lg-ghost" style="--c:#7cff4f"></span><span class="lg-ghost" style="--c:#e8d9f5"></span><span class="lg-ghost" style="--c:#ffc93c"></span> Ghosts: +10 s if caught</div>
+  <div><span class="lg-ghost" style="--c:#ff3b5c"></span><span class="lg-ghost" style="--c:#7cff4f"></span><span class="lg-ghost" style="--c:#e8d9f5"></span><span class="lg-ghost" style="--c:#ffc93c"></span> Ghosts: +10 s if caught (Arcade)</div>
+  <div><span class="lg-pac lg-rival"></span> Other players</div>
   <div><span class="lg-dots">• • •</span> Route (Pac-dots)</div>
 </aside>
 

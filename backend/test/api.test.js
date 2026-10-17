@@ -10,24 +10,31 @@ const { createApp, DEFAULT_CENTER } = require("../src/app");
 const { offset, distanceMeters } = require("../src/geo");
 const { planRoute } = require("../src/route");
 
-let server, base, clock = 1_800_000_000_000;
+let server, base, botServer, botBase, clock = 1_800_000_000_000;
 const now = () => clock;
 const tick = (seconds) => { clock += seconds * 1000; };
 
 before(async () => {
   const db = openDb(":memory:");
   const streets = createStreetService(db, { baked: loadBaked(path.join(__dirname, "..", "osm")), enabled: false });
-  server = createApp({ db, streets, now }).listen(0);
+  // the core tests run without the display-only demo players
+  server = createApp({ db, streets, now, bots: false }).listen(0);
   await new Promise((r) => server.once("listening", r));
   base = `http://localhost:${server.address().port}`;
-});
-after(() => server.close());
 
-async function call(method, url, { body, token } = {}) {
+  const botDb = openDb(":memory:");
+  const botStreets = createStreetService(botDb, { baked: loadBaked(path.join(__dirname, "..", "osm")), enabled: false });
+  botServer = createApp({ db: botDb, streets: botStreets, now, botReplyDelay: [20, 30], demoAccount: { name: "Demo", pin: "1234" } }).listen(0);
+  await new Promise((r) => botServer.once("listening", r));
+  botBase = `http://localhost:${botServer.address().port}`;
+});
+after(() => { server.close(); botServer.close(); });
+
+async function call(method, url, { body, token, on = base } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(base + url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await fetch(on + url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: res.status, body: await res.json() };
 }
 const get = (url, opts) => call("GET", url, opts);
@@ -65,6 +72,12 @@ test("accounts: a name is claimed with a PIN and protected afterwards", async ()
 
   const wrong = await post("/players", { name: "Milo Moon", pin: "0000" });
   assert.equal(wrong.status, 401);
+
+  // five wrong PINs lock the name, even for the right PIN
+  for (let i = 0; i < 4; i++) await post("/players", { name: "Milo Moon", pin: "0000" });
+  assert.equal((await post("/players", { name: "Milo Moon", pin: "4321" })).status, 429);
+  tick(11 * 60);
+  assert.equal((await post("/players", { name: "Milo Moon", pin: "4321" })).status, 200);
 
   assert.equal((await post("/players", { name: "x", pin: "1234" })).status, 400);
   assert.equal((await post("/players", { name: "Okay Name", pin: "12" })).status, 400);
@@ -294,4 +307,78 @@ test("chat is local and needs an account to post", async () => {
   assert.ok(near.body.some((x) => x.id === m.body.id));
   const far = offset(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, 50000, 0);
   assert.ok(!(await get(`/chat?lat=${far.lat}&lng=${far.lng}`)).body.some((x) => x.id === m.body.id));
+});
+
+// ---------- Display-only demo players ----------
+const onBots = (method, url, opts = {}) => call(method, url, { ...opts, on: botBase });
+
+test("demo account: the README PIN works and shared sign-ins don't end each other's runs", async () => {
+  const a = await onBots("POST", "/players", { body: { name: "Demo", pin: "1234" } });
+  assert.equal(a.status, 200);
+  assert.equal(a.body.created, false, "created at startup");
+  const b = await onBots("POST", "/players", { body: { name: "demo", pin: "1234" } });
+  const runA = await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: a.body.token });
+  const runB = await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: b.body.token });
+  assert.equal((await onBots("GET", `/runs/${runA.body.runId}`, { token: a.body.token })).body.ended, false);
+  assert.equal((await onBots("GET", "/players/me", { token: a.body.token })).body.activeRun.runId, runA.body.runId);
+  assert.equal((await onBots("GET", "/players/me", { token: b.body.token })).body.activeRun.runId, runB.body.runId);
+  // wrong guesses never lock the public demo account
+  for (let i = 0; i < 6; i++) await onBots("POST", "/players", { body: { name: "Demo", pin: "9999" } });
+  assert.equal((await onBots("POST", "/players", { body: { name: "Demo", pin: "1234" } })).status, 200);
+});
+
+test("walk mode: ghosts are harmless, so ghost events are refused", async () => {
+  const t = (await onBots("POST", "/players", { body: { name: "Walky", pin: "1234" } })).body.token;
+  const run = await onBots("POST", "/runs/start", { body: { mode: "gps", ...DEFAULT_CENTER }, token: t });
+  const r = await onBots("POST", `/runs/${run.body.runId}/event`, { body: { type: "spooked" }, token: t });
+  assert.equal(r.status, 400);
+  const fin = await onBots("POST", `/runs/${run.body.runId}/finish`, { body: {}, token: t });
+  assert.equal(fin.body.penalty, 0);
+});
+
+test("demo players fill the leaderboard, ranked alongside real players", async () => {
+  const q = `scope=street&mode=arcade&lat=${DEFAULT_CENTER.lat}&lng=${DEFAULT_CENTER.lng}`;
+  const board = (await onBots("GET", `/leaderboard?${q}`)).body;
+  assert.equal(board.bots, 4);
+  assert.ok(board.rows.every((r, i) => r.rank === i + 1));
+  assert.ok(board.rows.every((r) => r.bot && r.houses >= 1 && r.houses <= 12 && r.seconds > 0));
+  // stable for the day
+  assert.deepEqual((await onBots("GET", `/leaderboard?${q}`)).body.rows, board.rows);
+  // a real full clear in 1:00 beats every demo player
+  const t = (await onBots("POST", "/players", { body: { name: "Speedy", pin: "1234" } })).body.token;
+  const run = await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: t });
+  let pos = { ...DEFAULT_CENTER };
+  for (const h of run.body.houses) {
+    const d = distanceMeters(pos.lat, pos.lng, h.lat, h.lng);
+    tick(Math.max(1, d / 20));
+    pos = { lat: h.lat, lng: h.lng };
+    const v = await onBots("POST", `/runs/${run.body.runId}/visit`, { body: { houseId: h.id, ...pos }, token: t });
+    assert.equal(v.status, 200, JSON.stringify(v.body));
+  }
+  await onBots("POST", `/runs/${run.body.runId}/finish`, { body: {}, token: t });
+  const after = (await onBots("GET", `/leaderboard?${q}`, { token: t })).body;
+  assert.equal(after.rows[0].player, "Speedy");
+  assert.equal(after.rows[0].bot, false);
+  assert.equal(after.me.rank, 1);
+});
+
+test("chat: demo players chat in the background and reply to you", async () => {
+  const at = `lat=${DEFAULT_CENTER.lat}&lng=${DEFAULT_CENTER.lng}`;
+  const before = (await onBots("GET", `/chat?${at}`)).body;
+  assert.ok(before.length > 0 && before.every((m) => m.bot));
+  const t = (await onBots("POST", "/players", { body: { name: "Chatter", pin: "1234" } })).body.token;
+  await onBots("POST", "/chat", { body: { text: "hi! which house has the best candy?", ...DEFAULT_CENTER }, token: t });
+  await new Promise((r) => setTimeout(r, 120));
+  const list = (await onBots("GET", `/chat?${at}`)).body;
+  const mine = list.findIndex((m) => m.player === "Chatter");
+  assert.ok(mine >= 0);
+  assert.ok(list.slice(mine + 1).some((m) => m.bot), "a demo player answered");
+});
+
+test("activity: who's playing and a feed of what just happened", async () => {
+  const a = (await onBots("GET", `/activity?lat=${DEFAULT_CENTER.lat}&lng=${DEFAULT_CENTER.lng}`)).body;
+  assert.ok(a.players.length >= 3 && a.players.every((p) => p.name && p.color));
+  assert.ok(a.playing >= a.players.length);
+  assert.ok(a.feed.some((f) => f.text.startsWith("Speedy finished with 12")), "real finishes show up too");
+  assert.ok(a.feed.every((f, i) => i === 0 || a.feed[i - 1].time >= f.time));
 });

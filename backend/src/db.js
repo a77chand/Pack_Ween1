@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS house_reports (
 CREATE TABLE IF NOT EXISTS runs (
   id             INTEGER PRIMARY KEY,
   player_id      INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  session_hash   TEXT,                      -- which sign-in started it (a shared account can run twice)
   mode           TEXT NOT NULL,             -- 'gps' (ranked) or 'arcade'
   start_lat      REAL NOT NULL,
   start_lng      REAL NOT NULL,
@@ -86,7 +87,8 @@ CREATE TABLE IF NOT EXISTS messages (
   text      TEXT NOT NULL,
   lat       REAL,
   lng       REAL,
-  time      INTEGER NOT NULL
+  time      INTEGER NOT NULL,
+  bot       INTEGER NOT NULL DEFAULT 0     -- a demo player's reply (see bots.js)
 );
 
 -- Street maps from OpenStreetMap, cached because Overpass can take 30+ seconds
@@ -97,12 +99,22 @@ CREATE TABLE IF NOT EXISTS osm_cache (
 );
 `;
 
+// Columns added after the first release, for databases created before them
+const ADDED_COLUMNS = [
+  ["runs", "session_hash", "TEXT"],
+  ["messages", "bot", "INTEGER NOT NULL DEFAULT 0"],
+];
+
 function openDb(file) {
   if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec("PRAGMA foreign_keys = ON;");
   if (file !== ":memory:") db.exec("PRAGMA journal_mode = WAL;");
   db.exec(SCHEMA);
+  for (const [table, column, type] of ADDED_COLUMNS) {
+    const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
   return db;
 }
 

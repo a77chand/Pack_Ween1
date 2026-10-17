@@ -9,8 +9,9 @@ const cors = require("cors");
 const { distanceMeters, round, isNum, isLat, isLng, toRad } = require("./geo");
 const { tx } = require("./db");
 const { checkMove, LIMITS } = require("./anticheat");
-const { neighbourhood, realHousesNear, publicHouse, VERIFY_CLAIMS } = require("./neighbourhood");
+const { neighbourhood, realHousesNear, publicHouse, VERIFY_CLAIMS, MIN_REAL, DEMO_NAMES } = require("./neighbourhood");
 const { planRoute } = require("./route");
+const demoPlayers = require("./bots");
 
 // The demo neighbourhood used when the player's location is unknown
 const DEFAULT_CENTER = { lat: 43.4723, lng: -80.5449 };
@@ -26,6 +27,7 @@ const HOUSE_MIN_GAP = 15;      // meters between two volunteer houses
 const REPORTS_TO_HIDE = 3;
 const REPORT_RADIUS = 60;      // you must be this close to report a house
 const STALE_RUN_MS = 3 * 60 * 60 * 1000;
+const ACTIVE_RUN_MS = 2 * 60 * 1000;    // a run pinged this recently counts as "playing now"
 const CHAT_RADIUS = 5000;
 
 const NAME_RE = /^[\p{L}\p{N} _.'-]{2,20}$/u;
@@ -40,22 +42,31 @@ function pinMatches(pin, stored) {
   return crypto.timingSafeEqual(test, Buffer.from(hash, "hex"));
 }
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
+const fmtSeconds = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-// Tiny in-memory rate limiter: at most `limit` hits per `windowMs` for a key
+// Tiny in-memory rate limiter: at most `limit` hits per `windowMs` for a key.
+// hit(key) records a hit and says whether it was allowed; hit.blocked(key) only checks.
 function limiter(limit, windowMs, now) {
   const hits = new Map();
-  return (key) => {
-    const t = now();
-    const list = (hits.get(key) || []).filter((x) => t - x < windowMs);
+  const recent = (key) => (hits.get(key) || []).filter((x) => now() - x < windowMs);
+  const hit = (key) => {
+    const list = recent(key);
     if (list.length >= limit) { hits.set(key, list); return false; }
-    list.push(t);
+    list.push(now());
     hits.set(key, list);
     if (hits.size > 5000) hits.delete(hits.keys().next().value);
     return true;
   };
+  hit.blocked = (key) => recent(key).length >= limit;
+  return hit;
 }
 
-function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(__dirname, "..", "public") }) {
+// bots: add the display-only demo players (leaderboard, chat, activity feed).
+// demoAccount: { name, pin } created at startup so visitors can sign in straight away.
+function createApp({
+  db, streets, now = () => Date.now(), publicDir = path.join(__dirname, "..", "public"),
+  bots = true, botReplyDelay = [2500, 6000], demoAccount = null,
+}) {
   const app = express();
   app.set("trust proxy", 1);
   app.use(cors()); // open to all origins so any front end can call the API
@@ -78,7 +89,7 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
     visitedCount: db.prepare("SELECT COUNT(*) AS n FROM run_houses WHERE run_id = ? AND visited_at IS NOT NULL"),
     totalCount: db.prepare("SELECT COUNT(*) AS n FROM run_houses WHERE run_id = ?"),
     markVisited: db.prepare("UPDATE run_houses SET visited_at = ? WHERE run_id = ? AND idx = ?"),
-    insertRun: db.prepare("INSERT INTO runs (player_id, mode, start_lat, start_lng, start_time) VALUES (?, ?, ?, ?, ?)"),
+    insertRun: db.prepare("INSERT INTO runs (player_id, session_hash, mode, start_lat, start_lng, start_time) VALUES (?, ?, ?, ?, ?, ?)"),
     insertRunHouse: db.prepare("INSERT INTO run_houses (run_id, idx, house_id, name, lat, lng, full_size) VALUES (?, ?, ?, ?, ?, ?, ?)"),
     openRuns: db.prepare("SELECT * FROM runs WHERE player_id = ? AND end_time IS NULL ORDER BY id DESC"),
     finishRun: db.prepare("UPDATE runs SET end_time = ? WHERE id = ?"),
@@ -91,8 +102,12 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
     hideHouse: db.prepare("UPDATE houses SET hidden = 1 WHERE id = ?"),
     claims: db.prepare(`SELECT COUNT(DISTINCT r.player_id) AS n FROM run_houses rh JOIN runs r ON r.id = rh.run_id
       WHERE rh.house_id = ? AND rh.visited_at IS NOT NULL AND r.flagged = 0`),
-    insertMsg: db.prepare("INSERT INTO messages (player_id, player, text, lat, lng, time) VALUES (?, ?, ?, ?, ?, ?)"),
+    insertMsg: db.prepare("INSERT INTO messages (player_id, player, text, lat, lng, time, bot) VALUES (?, ?, ?, ?, ?, ?, ?)"),
   };
+
+  if (demoAccount && !q.playerByKey.get(demoAccount.name.toLowerCase())) {
+    q.insertPlayer.run(demoAccount.name, demoAccount.name.toLowerCase(), hashPin(demoAccount.pin), now());
+  }
 
   const updateRun = (id, fields) => {
     const keys = Object.keys(fields);
@@ -105,7 +120,10 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
   function currentPlayer(req) {
     const h = req.get("authorization") || "";
     const m = /^Bearer ([a-f0-9]{64})$/i.exec(h);
-    return m ? q.playerByToken.get(sha256(m[1])) || null : null;
+    if (!m) return null;
+    const tokenHash = sha256(m[1]);
+    const player = q.playerByToken.get(tokenHash);
+    return player ? { ...player, tokenHash } : null;
   }
   function requireAuth(req, res, next) {
     req.player = currentPlayer(req);
@@ -126,8 +144,11 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
     let player = q.playerByKey.get(key);
     let created = false;
     if (player) {
+      // Lock a name after 5 wrong PINs (not the demo account: its PIN is public anyway)
+      const lockable = !demoAccount || key !== demoAccount.name.toLowerCase();
+      if (lockable && failedPins.blocked(key)) return res.status(429).json({ error: "too many wrong PINs, try again in 10 minutes" });
       if (!pinMatches(pin, player.pin_hash)) {
-        if (!failedPins(key)) return res.status(429).json({ error: "too many wrong PINs, try again in 10 minutes" });
+        if (lockable) failedPins(key);
         return res.status(401).json({ error: "that name is taken and the PIN doesn't match" });
       }
     } else {
@@ -144,11 +165,15 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
   const runSeconds = (run) => Math.round(((run.end_time ?? now()) - run.start_time) / 1000);
   const rankedSeconds = (run) => Math.max(0, runSeconds(run) + run.penalty - run.bonus);
 
-  // Close runs the player walked away from, ending them at their last activity
-  function closeStaleRuns(playerId, exceptRecent) {
+  // Close runs the player walked away from (and, when starting a new run, the
+  // previous run from this same sign-in), ending them at their last activity.
+  // Runs from other sign-ins are left alone, so people sharing the demo account
+  // don't end each other's games.
+  function closeStaleRuns(playerId, sessionToClose = null) {
     for (const run of q.openRuns.all(playerId)) {
       const last = run.last_time ?? run.start_time;
-      if (!exceptRecent || now() - last > STALE_RUN_MS) q.finishRun.run(Math.max(last, run.start_time), run.id);
+      if (now() - last > STALE_RUN_MS || (sessionToClose && run.session_hash === sessionToClose))
+        q.finishRun.run(Math.max(last, run.start_time), run.id);
     }
   }
 
@@ -217,7 +242,7 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
   }
 
   app.get("/players/me", requireAuth, (req, res) => {
-    closeStaleRuns(req.player.id, true);
+    closeStaleRuns(req.player.id);
     const runs = db.prepare(`
       SELECT r.*, (SELECT COUNT(*) FROM run_houses WHERE run_id = r.id AND visited_at IS NOT NULL) AS houses
       FROM runs r WHERE r.player_id = ? AND r.end_time IS NOT NULL AND r.flagged = 0`).all(req.player.id);
@@ -226,7 +251,7 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
       const s = rankedSeconds(r);
       if (!best || r.houses > best.houses || (r.houses === best.houses && s < best.seconds)) best = { houses: r.houses, seconds: s, mode: r.mode };
     }
-    const open = q.openRuns.get(req.player.id);
+    const open = q.openRuns.all(req.player.id).find((r) => r.session_hash === req.player.tokenHash || r.session_hash == null);
     res.json({
       id: req.player.id,
       name: req.player.name,
@@ -343,8 +368,8 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
     const st = await streets.wait(pos.lat, pos.lng, 4000);
     const houses = neighbourhood(db, pos.lat, pos.lng, st.status === "ready" ? st.data : null, req.player.id);
     const runId = tx(db, () => {
-      closeStaleRuns(req.player.id, false); // one run at a time
-      const r = q.insertRun.run(req.player.id, mode, pos.lat, pos.lng, now());
+      closeStaleRuns(req.player.id, req.player.tokenHash); // one run at a time per sign-in
+      const r = q.insertRun.run(req.player.id, req.player.tokenHash, mode, pos.lat, pos.lng, now());
       const id = Number(r.lastInsertRowid);
       houses.forEach((h, i) => q.insertRunHouse.run(id, i + 1, h.ref, h.name, h.lat, h.lng, h.fullSize ? 1 : 0));
       return id;
@@ -405,6 +430,7 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
     if (!run) return;
     if (run.end_time) return res.status(400).json({ error: "run already finished" });
     if (!eventLimit(run.id)) return res.status(429).json({ error: "slow down" });
+    if (run.mode === "gps") return res.status(400).json({ error: "ghosts are just for fun in Walk mode" });
     const type = req.body?.type;
     if (type === "spooked") {
       updateRun(run.id, { penalty: run.penalty + SPOOK_PENALTY, spooks: run.spooks + 1 });
@@ -474,13 +500,21 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
       const cur = best.get(r.player_id);
       if (!cur || entry.houses > cur.houses || (entry.houses === cur.houses && entry.seconds < cur.seconds)) best.set(r.player_id, entry);
     }
-    const ranked = [...best.values()]
+    const entries = [...best.values()];
+    if (bots) {
+      for (const b of demoPlayers.leaderboardBots({ scope, mode, pos, now: now() }))
+        entries.push({ ...b, playerId: null, runId: null, endTime: Infinity });
+    }
+    const ranked = entries
       .sort((a, b) => b.houses - a.houses || a.seconds - b.seconds || a.endTime - b.endTime)
       .map((e, i) => ({ rank: i + 1, ...e }));
     const viewer = currentPlayer(req);
-    const strip = ({ playerId, endTime, ...e }) => ({ ...e, me: viewer ? playerId === viewer.id : false });
+    const strip = ({ playerId, endTime, ...e }) => ({ ...e, bot: !!e.bot, me: viewer ? playerId === viewer.id : false });
     const mine = viewer ? ranked.find((e) => e.playerId === viewer.id) : null;
-    res.json({ scope, mode, count: ranked.length, rows: ranked.slice(0, 20).map(strip), me: mine ? strip(mine) : null });
+    res.json({
+      scope, mode, count: ranked.length, bots: ranked.filter((e) => e.bot).length,
+      rows: ranked.slice(0, 20).map(strip), me: mine ? strip(mine) : null,
+    });
   });
 
   // ---------- Route ----------
@@ -502,6 +536,13 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
   });
 
   // ---------- Chat ----------
+  // Candy house names around a point, for the demo players to talk about
+  function houseNamesNear(pos) {
+    const at = pos || DEFAULT_CENTER;
+    const real = realHousesNear(db, at.lat, at.lng).map((h) => h.name);
+    return real.length >= MIN_REAL ? real : real.concat(DEMO_NAMES);
+  }
+
   app.get("/chat", (req, res) => {
     const pos = readLatLng(req.query);
     if (pos === false) return res.status(400).json({ error: "lat and lng must be numbers" });
@@ -513,7 +554,9 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
     } else {
       rows = db.prepare("SELECT * FROM messages ORDER BY id DESC LIMIT 50").all();
     }
-    res.json(rows.reverse().map((m) => ({ id: m.id, player: m.player, text: m.text, time: m.time })));
+    const list = rows.reverse().map((m) => ({ id: m.id, player: m.player, text: m.text, time: m.time, bot: !!m.bot }));
+    if (bots) list.push(...demoPlayers.chatter(pos, now(), houseNamesNear(pos)));
+    res.json(list.sort((a, b) => a.time - b.time).slice(-50));
   });
 
   app.post("/chat", requireAuth, (req, res) => {
@@ -522,8 +565,46 @@ function createApp({ db, streets, now = () => Date.now(), publicDir = path.join(
     if (!chatLimit(req.player.id)) return res.status(429).json({ error: "you're typing faster than a ghost, slow down" });
     const hasPos = isLat(lat) && isLng(lng);
     const msg = { player: req.player.name, text: text.trim().slice(0, 300), time: now() };
-    const r = q.insertMsg.run(req.player.id, msg.player, msg.text, hasPos ? lat : null, hasPos ? lng : null, msg.time);
-    res.json({ id: Number(r.lastInsertRowid), ...msg });
+    const r = q.insertMsg.run(req.player.id, msg.player, msg.text, hasPos ? lat : null, hasPos ? lng : null, msg.time, 0);
+    if (bots) {
+      // a demo player answers a few seconds later
+      const names = houseNamesNear(hasPos ? { lat, lng } : null);
+      const [lo, hi] = botReplyDelay;
+      const timer = setTimeout(() => {
+        const reply = demoPlayers.replyTo(msg.text, msg.player, now(), names);
+        q.insertMsg.run(null, reply.player, reply.text, hasPos ? lat : null, hasPos ? lng : null, now(), 1);
+      }, lo + Math.random() * (hi - lo));
+      timer.unref?.();
+    }
+    res.json({ id: Number(r.lastInsertRowid), ...msg, bot: false });
+  });
+
+  // ---------- Who's playing ----------
+  // Players out right now near a point, plus a feed of what happened recently
+  app.get("/activity", (req, res) => {
+    const pos = readLatLng(req.query);
+    if (pos === false) return res.status(400).json({ error: "lat and lng must be numbers" });
+    const at = pos || DEFAULT_CENTER;
+    const radius = SCOPES.district;
+    const dLat = radius / 111320, dLng = radius / (111320 * Math.cos(toRad(at.lat)));
+    const t = now();
+    const runs = db.prepare(`
+      SELECT r.*, p.name, (SELECT COUNT(*) FROM run_houses WHERE run_id = r.id AND visited_at IS NOT NULL) AS houses
+      FROM runs r JOIN players p ON p.id = r.player_id
+      WHERE r.start_lat BETWEEN ? AND ? AND r.start_lng BETWEEN ? AND ?
+        AND (r.end_time > ? OR (r.end_time IS NULL AND r.last_time > ?))`)
+      .all(at.lat - dLat, at.lat + dLat, at.lng - dLng, at.lng + dLng, t - 60 * 60 * 1000, t - ACTIVE_RUN_MS);
+    const playingNow = runs.filter((r) => r.end_time == null).length;
+    const feed = runs.filter((r) => r.end_time && !r.flagged && r.houses > 0).map((r) => ({
+      text: `${r.name} finished with ${r.houses} 🍬 in ${fmtSeconds(rankedSeconds(r))}`, time: r.end_time, bot: false,
+    }));
+    const demo = bots ? demoPlayers.activity(at, t, houseNamesNear(pos)) : { players: [], extra: 0, feed: [] };
+    feed.push(...demo.feed);
+    res.json({
+      playing: playingNow + demo.players.length + demo.extra,
+      players: demo.players,
+      feed: feed.sort((a, b) => b.time - a.time).slice(0, 8),
+    });
   });
 
   // Unknown routes

@@ -7,6 +7,8 @@
 // turns back unless it hits a dead end. Frightened ghosts wander randomly and
 // can be eaten; eaten ghosts race home as a pair of eyes.
 // Without a street map they float straight towards their targets instead.
+// In Walk mode they are harmless: they just wander for atmosphere, since nothing
+// can really catch you in real life.
 
 import { Walker } from "./streets.js";
 
@@ -36,7 +38,7 @@ const svg = (color) => `
 </div>`;
 
 export class Ghosts {
-  // opts: { graph, toLatLng, layer, home:[x,y], corners:[[x,y]x4], mode, count, speeds, catchRadius, onCatch, onEat }
+  // opts: { graph, toLatLng, layer, home:[x,y], corners:[[x,y]x4], mode, count, speeds, catchRadius, harmless, onCatch, onEat }
   constructor(opts) {
     Object.assign(this, opts);
     this.t = 0;
@@ -94,7 +96,7 @@ export class Ghosts {
   targetFor(g, p) {
     if (g.state === "eaten") return this.home;
     const [cx, cy] = this.corners[g.i % this.corners.length];
-    if (this.phase() === "scatter") return [cx, cy];
+    if (this.harmless || this.phase() === "scatter") return [cx, cy];
     const ahead = this.mode === "gps" ? 25 : 60;
     switch (g.kind.target) {
       case "ambush":
@@ -130,7 +132,7 @@ export class Ghosts {
     let options = came == null ? adj : adj.filter((n) => n !== came);
     if (!options.length) options = adj; // dead end: turn around
     if (options.length === 1) return options[0];
-    if (g.state === "fright") return options[Math.floor(Math.random() * options.length)];
+    if (g.state === "fright" || this.harmless) return options[Math.floor(Math.random() * options.length)];
     const field = this.fieldFor(g, target);
     let best = options[0], bestD = Infinity;
     for (const n of options) {
@@ -168,6 +170,11 @@ export class Ghosts {
         // No street map: float towards the target (or away from Pac-Man when scared)
         let dx = target[0] - g.x, dy = target[1] - g.y;
         if (g.state === "fright") { dx = g.x - player.x; dy = g.y - player.y; }
+        else if (this.harmless) { // drift around the ghost's own corner
+          const w = this.t * 0.15 + g.i * 1.6;
+          dx = target[0] + Math.cos(w) * 120 - g.x;
+          dy = target[1] + Math.sin(w) * 120 - g.y;
+        }
         const l = Math.hypot(dx, dy);
         if (l > 0.5) {
           const wobble = Math.sin(this.t * 2 + g.i * 1.7) * 0.35;
@@ -186,7 +193,7 @@ export class Ghosts {
         g.releaseAt = this.t + 1.5;
       }
 
-      const touching = Math.hypot(g.x - player.x, g.y - player.y) < this.catchRadius;
+      const touching = !this.harmless && Math.hypot(g.x - player.x, g.y - player.y) < this.catchRadius;
       if (touching && g.state === "fright") {
         g.state = "eaten";
         this.onEat(g);

@@ -88,3 +88,19 @@ test("ghosts catch a Pac-Man who stands still, and a power-up makes them edible"
   }
   assert.ok(!events.some(([type]) => type === "caught"), "no catches while frightened");
 });
+
+test("walk-mode ghosts are harmless: they wander but never catch anyone", () => {
+  const g = new StreetGraph(data, proj);
+  const node = g.nearestNode(-80, 20);
+  const pac = { x: g.x[node], y: g.y[node], hx: 1, hy: 0 };
+  const caught = [];
+  const ghosts = new Ghosts({
+    graph: g, toLatLng: proj.toLatLng, layer: null, home: [g.x[node], g.y[node]], // spawn right on top of Pac-Man
+    corners: [[300, 300], [-300, 300], [300, -300], [-300, -300]], mode: "gps", count: 3,
+    speeds: { chase: 1.3, fright: 1.8, eaten: 6 }, catchRadius: 12, harmless: true,
+    onCatch: () => caught.push(1), onEat: () => caught.push(1),
+  });
+  for (let f = 0; f < 60 * 60; f++) ghosts.update(1 / 60, pac, true);
+  assert.equal(caught.length, 0);
+  assert.ok(ghosts.list.some((gh) => Math.hypot(gh.x - pac.x, gh.y - pac.y) > 20), "they do move around");
+});

@@ -128,4 +128,6 @@ function neighbourhood(db, lat, lng, streets, viewerId = null) {
   return list;
 }
 
-module.exports = { neighbourhood, realHousesNear, publicHouse, demoHouses, anchorFor, VERIFY_CLAIMS, NEAR_METERS };
+const DEMO_NAMES = DEMO_SPOTS.map((s) => s[2]);
+
+module.exports = { neighbourhood, realHousesNear, publicHouse, demoHouses, anchorFor, VERIFY_CLAIMS, NEAR_METERS, MIN_REAL, DEMO_NAMES };

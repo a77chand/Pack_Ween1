@@ -12,4 +12,7 @@ const streets = createStreetService(db, {
   enabled: process.env.OSM_DISABLED !== "1",
 });
 
-createApp({ db, streets }).listen(PORT, () => console.log(`Pack_Ween running on http://localhost:${PORT}`));
+// A shared account so visitors can try it without making one (the PIN is in the README)
+const demoAccount = { name: "Demo", pin: "1234" };
+
+createApp({ db, streets, demoAccount }).listen(PORT, () => console.log(`Pack_Ween running on http://localhost:${PORT}`));

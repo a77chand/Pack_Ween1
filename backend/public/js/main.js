@@ -8,6 +8,7 @@ import { api, hasToken, setToken, store } from "./api.js";
 import { projector, distance, bearingXY } from "./geo.js";
 import { StreetGraph, Walker } from "./streets.js";
 import { Ghosts } from "./ghosts.js";
+import { Rivals } from "./rivals.js";
 import { planRoute, sampleDots } from "./route.js";
 import { sfx, isMuted, setMuted } from "./sound.js";
 import { $, el, toast, fmtTime, fmtDist, openModal, confirmModal, floatText, vibrate, reducedMotion } from "./ui.js";
@@ -25,8 +26,8 @@ const KEYS = { ArrowUp: "up", w: "up", W: "up", ArrowDown: "down", s: "down", S:
 
 const GAME = {
   arcade: { ghosts: 4, catchRadius: 9, speeds: { chase: 16.5, fright: 10, eaten: 45 }, fright: 8, invuln: 3, ghostHome: 150 },
-  // Walking: ghosts are slower than you, so they can always be out-walked
-  gps: { ghosts: 3, catchRadius: 12, speeds: { chase: 1.0, fright: 0.6, eaten: 6 }, fright: 30, invuln: 8, ghostHome: 180 },
+  // Walking: nothing can really catch you outside, so the ghosts just drift around for atmosphere
+  gps: { ghosts: 3, catchRadius: 12, speeds: { chase: 1.3, fright: 1.8, eaten: 6 }, fright: 30, invuln: 8, ghostHome: 120, harmless: true },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -63,6 +64,9 @@ const S = {
   lastPing: null,
   chatSeen: 0,
   chatOpen: false,
+  previewGraph: null,   // street graph for the map behind the start screen
+  activity: null,
+  feedSeen: 0,
 };
 
 const toXY = (lat, lng) => S.proj.toXY(lat, lng);
@@ -86,7 +90,13 @@ const decorLayer = L.layerGroup().addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
 const houseLayer = L.layerGroup().addTo(map);
 const ghostLayer = L.layerGroup().addTo(map);
+const rivalLayer = L.layerGroup().addTo(map);
 const dotRenderer = L.canvas({ padding: 0.3 });
+const rivals = new Rivals({
+  layer: rivalLayer,
+  toLatLng,
+  onArrive: (r, latlng) => { if (map.getBounds().contains(latlng)) floatText(map, latlng, "+1 🍬", "rival"); },
+});
 map.on("dragstart", () => { if (S.playing) S.userPannedAt = Date.now(); });
 
 const decorIcon = L.divIcon({ className: "", html: '<div class="decor">🏠</div>', iconSize: [18, 18], iconAnchor: [9, 9] });
@@ -203,13 +213,14 @@ async function loadNeighbourhood(pos) {
   if (moved || !S.proj) {
     S.proj = projector(hood.center.lat, hood.center.lng);
     S.streets = null;
+    S.previewGraph = null;
     S.streetsStatus = "loading";
   }
-  if (!S.playing) {
-    setHouses(hood.houses.map(({ id, ...h }) => ({ ...h, ref: id })));
-    const pts = S.houses.map((h) => [h.lat, h.lng]);
-    if (pts.length) map.fitBounds(pts, { padding: [60, 60], maxZoom: 17 });
-  }
+  setHouses(hood.houses.map(({ id, ...h }) => ({ ...h, ref: id })));
+  const pts = S.houses.map((h) => [h.lat, h.lng]);
+  if (pts.length) map.fitBounds(pts, { padding: [60, 60], maxZoom: 17 });
+  refreshRivals();
+  if (moved) loadActivity();
   updateStatus();
   if (moved || !S.streets) loadStreets(hood.center);
   return hood;
@@ -231,9 +242,11 @@ async function loadStreets(center) {
     if (r._status === 200 && Array.isArray(r.nodes)) {
       S.streets = r;
       S.streetsStatus = r.nodes.length > 1 ? "ready" : "none";
+      S.previewGraph = null;
       drawDecor();
       updateStatus();
       if (S.playing && !S.graph && S.streetsStatus === "ready") enterStreets();
+      else if (!S.playing) refreshRivals();
       return;
     }
     if (r._status === 202 && Date.now() - started < 120000) {
@@ -293,6 +306,7 @@ function enterStreets() {
   S.graph = buildGraph();
   if (S.run.mode === "arcade") S.pac.useGraph(S.graph);
   makeGhosts();
+  refreshRivals();
   if (S.routeOn) showRoute(true);
   toast("🗺️ Street maze loaded! Now you're running the real streets", "good");
 }
@@ -496,6 +510,7 @@ function makeGhosts() {
     count: cfg.ghosts,
     speeds: cfg.speeds,
     catchRadius: cfg.catchRadius,
+    harmless: !!cfg.harmless,
     onCatch: caught,
     onEat: ateGhost,
   });
@@ -548,7 +563,7 @@ function powerUp() {
   const secs = GAME[S.run.mode].fright;
   S.ghosts?.frighten(secs);
   sfx.power();
-  toast("🍫 Full-size bar! The ghosts are scared. Eat them!", "good", 3500);
+  toast(S.run.mode === "gps" ? "🍫 Full-size bars! Even the ghosts are scared of you 👻" : "🍫 Full-size bar! The ghosts are scared. Eat them!", "good", 3500);
 }
 
 // ---------- Claiming candy ----------
@@ -732,11 +747,14 @@ function follow() {
 }
 
 // ---------- Game loop ----------
+// Always running: the other players roam behind the start screen too
 let lastFrame = 0, lastCheck = 0;
 function frame(t) {
-  if (!S.playing) return;
+  requestAnimationFrame(frame);
   const dt = Math.min(0.05, (t - (lastFrame || t)) / 1000);
   lastFrame = t;
+  rivals.update(dt);
+  if (!S.playing) return;
   S.clock += dt;
   S.pac.update(dt, S.clock);
   drawPac();
@@ -749,8 +767,8 @@ function frame(t) {
     updateNext();
     updatePower();
   }
-  requestAnimationFrame(frame);
 }
+requestAnimationFrame(frame);
 
 // ---------- GPS ----------
 function startGps() {
@@ -865,6 +883,7 @@ function beginRun(run, x, y) {
   S.pacMarker = L.marker(toLatLng(x, y), { icon: pacIcon, zIndexOffset: 1000, interactive: false, keyboard: false }).addTo(map);
   pacEl = null; lastTf = ""; lastMoving = null;
   makeGhosts();
+  S.feedSeen = Math.max(0, ...(S.activity?.feed || []).map((f) => f.time));
 
   $("start").hidden = true;
   $("results").hidden = true;
@@ -883,9 +902,8 @@ function beginRun(run, x, y) {
     toast(S.graph ? "🕹️ Arrow keys / WASD or the D-pad. Run the streets!" : "🕹️ Arrow keys / WASD or the D-pad to move", "info", 3500);
   }
   S.playing = true;
+  refreshRivals();
   updateStatus();
-  lastFrame = 0;
-  requestAnimationFrame(frame);
 }
 
 function stopPlaying() {
@@ -951,7 +969,7 @@ function showResults(r) {
     stat("Candy", `${r.houses}/${r.total}`, all ? "full haul!" : `${r.total - r.houses} left behind`),
     stat("Time", fmtTime(r.seconds), adj || "no ghost trouble"),
     stat("Distance", fmtDist(r.meters), r.mode === "gps" ? "walked" : "run"),
-    stat("Ghosts eaten", String(r.ghosts), r.spooks ? `caught ${r.spooks}×` : "never caught"));
+    r.mode === "gps" ? stat("Ghosts", "👻", "just along for the vibes") : stat("Ghosts eaten", String(r.ghosts), r.spooks ? `caught ${r.spooks}×` : "never caught"));
   renderBoard($("resBoard"), { mode: r.mode, scope: "street", at: S.run.startLatLng });
   $("results").hidden = false;
   S.lastResult = r;
@@ -970,7 +988,7 @@ function renderBoard(container, opts) {
   const scopeTabs = el("div", { class: "tabs", role: "tablist" });
   const list = el("ol", { class: "board" });
   const draw = async () => {
-    modeTabs.replaceChildren(...[["gps", "🚶 Ranked walk"], ["arcade", "🕹️ Arcade"]].map(([m, label]) =>
+    modeTabs.replaceChildren(...[["gps", "🚶 Ranked walk"], ["arcade", "🕹️ At home"]].map(([m, label]) =>
       el("button", { role: "tab", "aria-selected": String(state.mode === m), onclick: () => { state.mode = m; draw(); } }, label)));
     scopeTabs.replaceChildren(...Object.entries(SCOPE_LABELS).map(([s, label]) =>
       el("button", { role: "tab", "aria-selected": String(state.scope === s), onclick: () => { state.scope = s; draw(); } }, label)));
@@ -989,6 +1007,7 @@ function renderBoard(container, opts) {
         el("span", { class: "score" }, `${e.houses} 🍬 · ${fmtTime(e.seconds)}`));
       const rows = b.rows.map(row);
       if (b.me && !b.rows.some((e) => e.me)) rows.push(el("li", { class: "sep" }, "⋯"), row(b.me));
+      if (b.bots) rows.push(el("li", { class: "board-note" }, "✨ Includes demo players, so there's always someone to beat"));
       list.replaceChildren(...rows);
     } catch (e) {
       list.replaceChildren(el("li", { class: "board-empty" }, e.message));
@@ -1072,11 +1091,11 @@ async function loadChat() {
   if (!msgs.length) box.append(el("p", { class: "empty" }, "No messages yet. Tell your neighbours which house has the best candy!"));
   for (const m of msgs) {
     const time = new Date(m.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    box.append(el("div", { class: `msg${S.profile && m.player === S.profile.name ? " mine" : ""}` },
-      el("b", {}, m.player), el("small", {}, time), el("p", {}, m.text)));
+    box.append(el("div", { class: `msg${!m.bot && S.profile && m.player === S.profile.name ? " mine" : ""}` },
+      el("b", {}, m.player), m.bot && el("span", { class: "bot-tag", title: "Demo player" }, "demo"), el("small", {}, time), el("p", {}, m.text)));
   }
   if (atBottom) box.scrollTop = box.scrollHeight;
-  if (msgs.length) S.chatSeen = Math.max(S.chatSeen, msgs[msgs.length - 1].id);
+  if (msgs.length) S.chatSeen = Math.max(S.chatSeen, msgs[msgs.length - 1].time);
   $("chatBadge").hidden = true;
   return msgs;
 }
@@ -1100,7 +1119,47 @@ async function pollChatBadge() {
   const at = chatAt();
   const msgs = (await api(`/chat${at ? `?lat=${at.lat}&lng=${at.lng}` : ""}`, { retries: 0 }).catch(() => null)) || [];
   const newest = msgs.length ? msgs[msgs.length - 1] : null;
-  if (newest && newest.id > S.chatSeen && newest.player !== S.profile?.name) $("chatBadge").hidden = false;
+  if (newest && newest.time > S.chatSeen && (newest.bot || newest.player !== S.profile?.name)) $("chatBadge").hidden = false;
+}
+
+// ---------- Other players ----------
+// Point the roaming players at the current houses and streets
+function refreshRivals() {
+  if (!S.proj || !S.houses.length) return;
+  let graph = null;
+  if (S.playing) graph = S.graph;
+  else if (S.streetsStatus === "ready") graph = S.previewGraph || (S.previewGraph = new StreetGraph(S.streets, S.proj));
+  const speed = S.playing && S.run.mode === "gps" ? [1.2, 1.7] : [12, 17];
+  rivals.setWorld(graph, S.houses.map((h) => [h.x, h.y]), speed);
+}
+
+const ago = (t) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? "just now" : `${m} min ago`;
+};
+
+async function loadActivity() {
+  const at = S.center || S.located;
+  const a = await api(`/activity${at ? `?lat=${at.lat}&lng=${at.lng}` : ""}`, { retries: 0 }).catch(() => null);
+  if (!a) return;
+  S.activity = a;
+  rivals.setPlayers(a.players);
+  $("live").hidden = false;
+  $("liveCount").textContent = a.playing;
+  $("liveFeed").replaceChildren(...a.feed.slice(0, 3).map((f) => el("li", {}, f.text, el("small", {}, ago(f.time)))));
+  if (S.playing) feedToast(a.feed);
+}
+
+// Now and then, mention what someone else just did
+let lastFeedToast = 0;
+function feedToast(feed) {
+  const me = S.profile?.name;
+  const fresh = feed.find((f) => f.time > S.feedSeen && !(me && f.text.startsWith(`${me} `)));
+  S.feedSeen = Math.max(S.feedSeen, ...feed.map((f) => f.time));
+  if (fresh && Date.now() - lastFeedToast > 45000) {
+    lastFeedToast = Date.now();
+    toast(`👀 ${fresh.text}`, "info", 3000);
+  }
 }
 
 // ---------- Wiring ----------
@@ -1116,6 +1175,11 @@ $("go").onclick = startGame;
 $("signIn").onsubmit = (e) => e.preventDefault();
 $("name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("pin").focus(); } });
 $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); startGame(); } });
+$("demoBtn").onclick = async () => {
+  $("name").value = "Demo";
+  $("pin").value = "1234";
+  await ensureSignedIn();
+};
 $("switchUser").onclick = () => { setToken(null); S.profile = null; renderWho(); $("name").focus(); };
 $("resumeGo").onclick = resumeRun;
 $("resumeEnd").onclick = async () => {
@@ -1139,6 +1203,7 @@ $("again").onclick = () => {
   S.pacMarker = null;
   S.pac = null;
   S.run = null;
+  S.graph = null;
   $("start").hidden = false;
   loadNeighbourhood(S.located);
 };
@@ -1190,6 +1255,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ---------- Boot ----------
+setInterval(loadActivity, 20000);
 (async () => {
   loadProfile();
   // Show the default neighbourhood straight away, then move to the player once located
