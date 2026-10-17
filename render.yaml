@@ -7,4 +7,9 @@ services:
     rootDir: backend
     buildCommand: npm ci
     startCommand: npm start
-    healthCheckPath: /
+    healthCheckPath: /health
+    envVars:
+      # SQLite lives here. The free plan's disk is wiped on every deploy; on a paid
+      # plan, attach a Render Disk and point DATA_DIR at it to keep data for good.
+      - key: DATA_DIR
+        value: ./data
