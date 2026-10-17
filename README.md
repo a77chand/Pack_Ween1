@@ -2,8 +2,8 @@
 
 **Pac-Man meets trick-or-treating.** Walk your real neighbourhood, collect candy from volunteer houses, and race your neighbours up the leaderboard.
 
-**▶ Play it live: https://pack-ween1.onrender.com**
-<sub>Hosted on a free server: the first load can take 30–60 seconds while it wakes up.</sub>
+**▶ Play it live: https://pack-ween.onrender.com**
+<sub>Hosted on Render's free tier and kept awake by a scheduled ping, so it should load straight away. If it ever does sleep, the first load takes 20–60 seconds.</sub>
 
 ![Pack_Ween gameplay: Pac-Man on a dark street map with candy houses, ghosts and a dotted route](docs/screenshot.jpg)
 
@@ -23,7 +23,7 @@ Open the site on your phone and go trick-or-treating. Houses handing out candy s
 
 ## How to play
 
-1. Open **https://pack-ween1.onrender.com** and allow location access.
+1. Open **https://pack-ween.onrender.com** and allow location access.
 2. Enter your name and pick a leaderboard (street, district or city).
 3. Tick **"Use my real GPS location"** to play by walking, or leave it unticked to move with the arrows.
 4. Walk to the 🏠🍬 houses. **🍬 Find candy** points to the nearest one and **🧭 Route** shows the full path.
