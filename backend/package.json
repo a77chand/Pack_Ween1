@@ -1,13 +1,17 @@
 {
   "name": "pack-ween-backend",
-  "version": "1.0.0",
-  "description": "",
+  "version": "2.0.0",
+  "description": "Pac-Man on your real streets: trick-or-treating game server and game page",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test \"test/*.test.*\"",
+    "bake-osm": "node scripts/bake-osm.js"
   },
-  "keywords": [],
-  "author": "",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "keywords": ["game", "pac-man", "halloween", "leaflet", "openstreetmap"],
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {

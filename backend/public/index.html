@@ -2,597 +2,146 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0612">
+<meta name="description" content="Pac-Man on your real streets: trick-or-treat, collect candy from volunteer houses, dodge ghosts and top your neighbourhood leaderboard.">
 <title>Pack_Ween</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 16 L30 8 A15 15 0 1 0 30 24 Z' fill='%23ff7518'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #12091f; color: #fff; }
-  #map { position: fixed; inset: 0; z-index: 1; }
-  button { font: inherit; cursor: pointer; border: 0; border-radius: 12px; padding: 10px 14px; background: #2d1b4e; color: #fff; }
-  button:hover { filter: brightness(1.15); }
-  input, select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #5b3d8a; background: #1e1233; color: #fff; width: 100%; }
-  .screen { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(10, 4, 20, .45); overflow-y: auto; }
-  .card { width: 100%; max-width: 380px; background: #1b0f2e; border: 2px solid #ff7a00; border-radius: 18px; padding: 22px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 40px rgba(255, 122, 0, .35); }
-  .card h1 { margin: 0; font-size: 32px; color: #ffb300; text-align: center; }
-  .card h2 { margin: 0; color: #ffb300; text-align: center; }
-  .card h3 { margin: 6px 0 0; }
-  .card p { margin: 0; color: #d9c8f0; }
-  .card label { display: flex; gap: 8px; align-items: center; color: #d9c8f0; }
-  .card label input { width: auto; }
-  .primary { background: #ff7a00; color: #1b0f2e; font-weight: 700; padding: 12px; }
-  .hint { font-size: 13px; text-align: center; }
-  .how { margin: 0; padding-left: 20px; color: #d9c8f0; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-  #legend { position: fixed; left: 12px; top: 60px; z-index: 500; background: rgba(27, 15, 46, .9); border: 2px solid #2121de; border-radius: 12px; padding: 8px 10px; font-size: 12px; line-height: 1.7; }
-  #legend b { color: #ffd400; }
-  #next { font-size: 10px; color: #fff; }
-  #board { margin: 0; padding-left: 22px; max-height: 200px; overflow: auto; }
-  #board li { padding: 3px 0; }
-  #board li.me { color: #ffb300; font-weight: 700; }
-  #hud { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 500; background: rgba(27, 15, 46, .92); border: 2px solid #ff7a00; border-radius: 999px; padding: 8px 18px; font-weight: 700; white-space: nowrap; }
-  #bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 500; display: flex; gap: 8px; justify-content: center; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(18, 9, 31, .92); }
-  #bar .end { background: #ff7a00; color: #1b0f2e; font-weight: 700; }
-  #bar .end.sure { background: #e0245e; color: #fff; }
-  #pad { position: fixed; right: 16px; bottom: 80px; z-index: 500; display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(3, 48px); gap: 4px; }
-  #pad button { padding: 0; font-size: 20px; background: rgba(45, 27, 78, .92); border: 1px solid #5b3d8a; }
-  #pad .u { grid-column: 2; grid-row: 1; } #pad .l { grid-column: 1; grid-row: 2; }
-  #pad .r { grid-column: 3; grid-row: 2; } #pad .d { grid-column: 2; grid-row: 3; }
-  #chat { position: fixed; z-index: 1100; right: 16px; bottom: 80px; width: min(360px, calc(100% - 32px)); height: min(460px, 65vh); background: #1b0f2e; border: 2px solid #ff7a00; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
-  .chat-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #2d1b4e; font-weight: 700; }
-  .chat-head button { padding: 4px 10px; }
-  #msgs { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-  .msg { background: #2d1b4e; border-radius: 10px; padding: 6px 10px; }
-  .msg b { color: #ffb300; }
-  .msg small { color: #a78fc9; margin-left: 6px; }
-  .empty { color: #a78fc9; text-align: center; margin-top: 20px; }
-  #chatForm { display: flex; gap: 6px; padding: 10px; border-top: 1px solid #3a2560; }
-  #chatForm button { background: #ff7a00; color: #1b0f2e; font-weight: 700; }
-  #toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%) translateY(-20px); z-index: 2000; background: #ff7a00; color: #1b0f2e; font-weight: 700; padding: 10px 16px; border-radius: 12px; opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100% - 32px); text-align: center; }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .pac-wrap { width: 30px; height: 30px; }
-  .pac { width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(from 120deg, #ffd400 0 300deg, transparent 300deg 360deg); animation: chomp .35s infinite alternate; transition: transform .15s; filter: drop-shadow(0 0 6px #ffd400); }
-  @keyframes chomp { to { background: conic-gradient(from 100deg, #ffd400 0 340deg, transparent 340deg 360deg); } }
-  .arcade, #hud, .card h1, .card h2 { font-family: "Press Start 2P", system-ui, monospace; }
-  .card h1 { font-size: 22px; line-height: 1.4; }
-  #hud { font-size: 12px; color: #ffd400; border-color: #2121de; box-shadow: 0 0 12px #2121de; }
-  .card { border-color: #2121de; box-shadow: 0 0 30px rgba(33, 33, 222, .6); }
-  .leaflet-container { background: #e8e4dc; }
-
-  .house { position: relative; font-size: 24px; line-height: 1; }
-  .house .c { position: absolute; right: -14px; top: -10px; font-size: 18px; animation: bob 1s infinite alternate; filter: drop-shadow(0 0 6px #ff4fd8); }
-  .house.done { opacity: .5; } .house.done .c { display: none; }
-  .decor { font-size: 18px; opacity: .55; filter: grayscale(.4); }
-  .ghost { font-size: 26px; transition: transform .8s linear; filter: drop-shadow(0 0 6px #6cf); }
-  @keyframes bob { to { transform: translateY(-4px) scale(1.1); } }
-  .candy { font-size: 28px; line-height: 1; filter: drop-shadow(0 0 4px #ff7a00); }
-  .candy.done { opacity: .45; filter: grayscale(1); }
-
-  /* ===== Halloween theme (colours only) ===== */
-  html, body { background: #0d0612; overflow: hidden; }
-  button { background: #2a1240; border: 1px solid #4a2370; }
-  input, select { border-color: #8b3dff; background: #160a22; }
-  .screen { background: radial-gradient(ellipse at center, rgba(40, 10, 60, .3), rgba(8, 2, 12, .7)); }
-  .card { background: linear-gradient(180deg, #1f0d2e, #12071b); border: 2px solid #ff7518; box-shadow: 0 0 30px rgba(255, 117, 24, .45), 0 0 80px rgba(139, 61, 255, .35); }
-  .card h1, .card h2 { color: #ff7518; text-shadow: 0 0 10px rgba(255, 117, 24, .7), 3px 3px 0 #3b0a57; }
-  .card p, .card label, .how { color: #e8d9f5; }
-  .card h3 { color: #7cff4f; }
-  .primary, #bar .end, #chatForm button { background: linear-gradient(180deg, #ff9a3c, #ff7518); color: #1a0700; border: 0; }
-  #bar .end.sure { background: #d7263d; color: #fff; }
-  #hud { background: rgba(13, 6, 18, .92); color: #ffc93c; border-color: #ff7518; box-shadow: 0 0 14px rgba(255, 117, 24, .7); }
-  #next { color: #7cff4f; }
-  #legend { background: rgba(26, 11, 38, .92); border-color: #8b3dff; box-shadow: 0 0 12px rgba(139, 61, 255, .5); }
-  #legend b { color: #ff7518; }
-  #bar { background: linear-gradient(0deg, rgba(13, 6, 18, .96), rgba(26, 11, 38, .9)); border-top: 2px solid #ff7518; }
-  #findBtn { color: #7cff4f; border-color: #7cff4f; }
-  #pad { bottom: calc(100px + env(safe-area-inset-bottom, 0px)); z-index: 600; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); }
-  #pad button { background: #ff7518; color: #1a0700; border: 2px solid #ffc93c; font-size: 22px; box-shadow: 0 0 12px rgba(255, 117, 24, .8); }
-  #chat { background: #1a0b26; border-color: #ff7518; box-shadow: 0 0 24px rgba(139, 61, 255, .45); }
-  .chat-head { background: linear-gradient(90deg, #3b0a57, #1f0d2e); color: #ff7518; }
-  .msg { background: #2a1240; }
-  .msg b, #board li.me { color: #ff7518; }
-  #toast { background: #ff7518; color: #1a0700; box-shadow: 0 0 16px rgba(255, 117, 24, .7); }
-  .pac { background: conic-gradient(from 120deg, #ff7518 0 300deg, transparent 300deg 360deg); filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 8px #ff7518); }
-  @keyframes chomp { to { background: conic-gradient(from 100deg, #ff7518 0 340deg, transparent 340deg 360deg); } }
-  .house .c { filter: drop-shadow(0 0 6px #ff7518); }
-  .ghost { filter: drop-shadow(0 0 7px #7cff4f); }
-  .leaflet-container { background: #1a0b26; }
-  /* spooky edge: sits above the map but never blocks clicks */
-  #spooky { position: fixed; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(30, 5, 45, .55) 100%), rgba(255, 117, 24, .05); }
-  /* dark-mode map: only recolours the street tiles, map data is unchanged */
-  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(1.25) contrast(1.15) saturate(.7); }
-
-  [hidden] { display: none !important; }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="map"></div>
-<div id="spooky" aria-hidden="true"></div>
+<div id="map" aria-label="Map of your neighbourhood"></div>
+<div id="vignette" aria-hidden="true"></div>
 
-<div id="start" class="screen">
-  <div class="card">
-    <h1>🎃 Pack_Ween</h1>
-    <p>Trick-or-treat like Pac-Man! Walk up to a house to grab its candy. Most candy in the fastest time wins.</p>
-    <ol class="how">
-      <li>🟠 You are a pumpkin Pac-Man on a real map of your neighbourhood.</li>
-      <li>🏠🍬 Houses with candy are volunteers handing out treats. Plain 🏠 have none.</li>
-      <li>Get within <b>25 m</b> of a candy house and the candy is claimed automatically.</li>
-      <li>🧭 Route shows the shortest path (Pac-dots) to every candy house.</li>
-      <li>🏁 End session to see the leaderboard, then 💬 chat with neighbours.</li>
-    </ol>
-    <input id="name" placeholder="Your name" maxlength="20">
-    <select id="zone">
-      <option value="street">Street leaderboard</option>
-      <option value="district">District leaderboard</option>
-      <option value="city">City leaderboard</option>
-    </select>
-    <label><input type="checkbox" id="gps"> Use my real GPS location</label>
-    <button id="go" class="primary">Start trick-or-treating</button>
-    <p class="hint">No GPS? Walk with the arrow keys / WASD or the on-screen arrows.</p>
+<!-- ===== Start screen ===== -->
+<section id="start" class="screen">
+  <div class="card start-card">
+    <h1 class="logo"><span class="logo-pac" aria-hidden="true"></span>PACK_WEEN</h1>
+    <p class="tagline">Pac-Man on your real streets. Grab candy from volunteer houses, dodge the ghosts, and top your neighbourhood's leaderboard.</p>
+
+    <div id="resumeBox" class="notice" hidden>
+      <p id="resumeText"></p>
+      <div class="row">
+        <button id="resumeEnd">End that run</button>
+        <button id="resumeGo" class="primary">Resume</button>
+      </div>
+    </div>
+
+    <div id="signedIn" class="who" hidden>
+      <div>👋 Playing as <b id="meName"></b> <button id="switchUser" class="link" type="button">switch</button></div>
+      <div id="meStats" class="muted small"></div>
+    </div>
+    <form id="signIn" class="who" autocomplete="on">
+      <div class="row">
+        <input id="name" placeholder="Your name" maxlength="20" autocomplete="nickname" aria-label="Your name">
+        <input id="pin" class="pin" placeholder="PIN" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password" aria-label="PIN, 4 to 8 digits">
+      </div>
+      <p class="hint">New name? Pick any 4-digit PIN to claim it. Back again? Use the same PIN.</p>
+    </form>
+
+    <div class="modes" role="radiogroup" aria-label="Game mode">
+      <button class="mode" type="button" role="radio" data-mode="arcade" aria-checked="true">
+        <span class="mode-icon" aria-hidden="true">🕹️</span><b>Arcade</b><small>Arrow keys or D-pad. Play from anywhere.</small>
+      </button>
+      <button class="mode" type="button" role="radio" data-mode="gps" aria-checked="false">
+        <span class="mode-icon" aria-hidden="true">🚶</span><b>Walk · Ranked</b><small>Real GPS. Walk up to the houses.</small>
+      </button>
+    </div>
+
+    <button id="go" class="primary big">Start trick-or-treating</button>
+    <div id="hoodStatus" class="status" aria-live="polite">📍 Finding your neighbourhood…</div>
+
+    <div class="row">
+      <button id="boardBtn" type="button">🏆 Leaderboard</button>
+      <button id="hostBtn" type="button">🏠 Hand out candy</button>
+    </div>
+
+    <details class="how">
+      <summary>How to play</summary>
+      <ol>
+        <li><b class="o">You're the pumpkin Pac-Man</b> on a real map. In Arcade you run along the actual streets like a maze.</li>
+        <li>🏠🍬 houses are volunteers handing out candy. Get within <b>25 m</b> and it's yours.</li>
+        <li>🍫 <b class="g">Full-size bar houses are power-ups:</b> the ghosts turn purple and run. Eat one for <b>−5 s</b>.</li>
+        <li>👻 A ghost that catches you costs <b>+10 s</b>. Most candy wins; time breaks ties.</li>
+        <li>🧭 <b>Route</b> lays Pac-dots along the shortest walk through every house.</li>
+        <li><b>Walk · Ranked</b> uses your real GPS and gets its own leaderboard. The server checks your speed, so no cars or teleporting.</li>
+      </ol>
+    </details>
   </div>
+</section>
+
+<!-- ===== In-game HUD ===== -->
+<header id="hud" hidden>
+  <div class="hud-main">
+    <span class="hud-score">🍬 <b id="score">0</b><span class="dim">/<span id="total">0</span></span></span>
+    <span class="hud-time">⏱ <b id="time">0:00</b><small id="adj"></small></span>
+  </div>
+  <div class="hud-next"><span id="compass" aria-hidden="true">➤</span><span id="next">Looking for candy…</span></div>
+  <div id="powerBar" hidden><i></i></div>
+</header>
+
+<div id="tools" hidden>
+  <button id="muteBtn" aria-label="Sound on or off">🔊</button>
+  <button id="legendBtn" aria-label="Show legend" aria-expanded="false">?</button>
+  <button id="recenterBtn" aria-label="Follow Pac-Man" hidden>🎯</button>
 </div>
 
-<div id="hud" hidden>🍬 <span id="score">0</span>/<span id="total">0</span> &nbsp;⏱ <span id="time">0:00</span><br><span id="next"></span></div>
+<aside id="legend" hidden>
+  <b>LEGEND</b>
+  <div><span class="lg-pac"></span> You</div>
+  <div>🏠🍬 Candy house</div>
+  <div>🏠🍫 Full-size bars: power-up</div>
+  <div><span class="lg-check">✓</span> Verified by 3+ trick-or-treaters</div>
+  <div><span class="lg-ring"></span> 25 m claim zone</div>
+  <div><span class="lg-ghost" style="--c:#ff3b5c"></span><span class="lg-ghost" style="--c:#7cff4f"></span><span class="lg-ghost" style="--c:#e8d9f5"></span><span class="lg-ghost" style="--c:#ffc93c"></span> Ghosts: +10 s if caught</div>
+  <div><span class="lg-dots">• • •</span> Route (Pac-dots)</div>
+</aside>
 
-<div id="legend" hidden>
-  <b>LEGEND</b><br>
-  🟠 You (Pac-Man)<br>
-  🏠🍬 Candy house<br>
-  🏠 No candy<br>
-  ⭕ 25 m claim zone<br>
-  👻 Ghosts (just spooky)<br>
-  <span style="color:#ff7518">• • •</span> Route to candy
-</div>
+<div id="banner" hidden></div>
 
-<div id="pad" hidden>
+<div id="pad" hidden aria-label="Direction pad">
   <button class="u" data-dir="up" aria-label="Up">▲</button>
   <button class="l" data-dir="left" aria-label="Left">◀</button>
   <button class="r" data-dir="right" aria-label="Right">▶</button>
   <button class="d" data-dir="down" aria-label="Down">▼</button>
 </div>
 
-<div id="bar" hidden>
-  <button id="findBtn">🍬 Find candy</button>
-  <button id="routeBtn">🧭 Route</button>
-  <button id="chatBtn">💬 Chat</button>
-  <button id="endBtn" class="end">🏁 End session</button>
-</div>
+<nav id="bar" hidden>
+  <button id="findBtn"><span aria-hidden="true">🍬</span><small>Find</small></button>
+  <button id="routeBtn" aria-pressed="false"><span aria-hidden="true">🧭</span><small>Route</small></button>
+  <button id="chatBtn"><span aria-hidden="true">💬</span><small>Chat</small><i id="chatBadge" hidden></i></button>
+  <button id="endBtn" class="end"><span aria-hidden="true">🏁</span><small>End</small></button>
+</nav>
 
+<!-- ===== Chat ===== -->
 <aside id="chat" hidden>
   <div class="chat-head"><span>👻 Neighbourhood chat</span><button id="chatClose" aria-label="Close chat">✕</button></div>
-  <div id="msgs"></div>
-  <form id="chatForm"><input id="chatText" maxlength="300" placeholder="Which house has the best candy?" autocomplete="off"><button>Send</button></form>
+  <div id="msgs" aria-live="polite"></div>
+  <form id="chatForm"><input id="chatText" maxlength="300" placeholder="Which house has the best candy?" autocomplete="off" aria-label="Message"><button class="primary">Send</button></form>
 </aside>
 
-<div id="results" class="screen" hidden>
+<!-- ===== Results ===== -->
+<section id="results" class="screen" hidden>
   <div class="card">
-    <h2>🏁 Session over!</h2>
-    <p id="summary"></p>
-    <h3>🏆 Leaderboard</h3>
-    <ol id="board"></ol>
-    <button id="resChat">💬 Share your night in the community chat</button>
-    <button id="again" class="primary">Play again</button>
+    <h2 id="resTitle">🏁 Run complete!</h2>
+    <div id="resFlag" class="notice warn" hidden></div>
+    <div id="resStats" class="stats"></div>
+    <div id="resBoard"></div>
+    <div class="row">
+      <button id="shareBtn">📤 Share</button>
+      <button id="resChat">💬 Chat</button>
+    </div>
+    <button id="again" class="primary big">Play again</button>
   </div>
-</div>
+</section>
 
-<div id="toast"></div>
+<div id="modal" class="screen" hidden><div id="modalCard" class="card" role="dialog" aria-modal="true"></div></div>
+<div id="toasts" aria-live="polite"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-// Same server when hosted on Render/localhost, otherwise call the Render backend
-const API = (location.hostname === "localhost" || location.hostname.endsWith("onrender.com")) ? "" : "https://pack-ween1.onrender.com";
-const RADIUS = 25;   // must match VISIT_RADIUS_METERS on the server
-const STEP = 6;      // meters per arrow press
-const $ = (id) => document.getElementById(id);
-
-let houses = [], markers = {}, collected = new Set(), pending = new Set();
-let me = null, meMarker = null, heading = 0;
-let runId = null, player = "anon", zone = "street", startedAt = 0, timer = null;
-let startPos = null;
-let useGps = false, watchId = null, routeLine = null, chatTimer = null, ended = false;
-
-async function api(path, body) {
-  const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
-  const res = await fetch(API + path, opts);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
-  return data;
-}
-
-function toast(msg) {
-  const t = $("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(t._h);
-  t._h = setTimeout(() => t.classList.remove("show"), 2600);
-}
-
-function distanceMeters(lat1, lng1, lat2, lng2) {
-  const R = 6371000, toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-// ---------- Map ----------
-const map = L.map("map", { zoomControl: false }).setView([43.4723, -80.5449], 17);
-// Street map: Esri (no API key). If its tiles keep failing, switch to the OSM France backup.
-const streetMap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
-  maxZoom: 19, maxNativeZoom: 18, attribution: "Tiles &copy; Esri &middot; &copy; OpenStreetMap contributors",
-}).addTo(map);
-let tileErrors = 0;
-streetMap.on("tileerror", () => {
-  if (++tileErrors !== 4) return;
-  map.removeLayer(streetMap);
-  L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
-    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors, tiles OSM France",
-  }).addTo(map).bringToBack();
-});
-
-const candyIcon = (done) => L.divIcon({ className: "", html: `<div class="house${done ? " done" : ""}"><span>🏠</span><span class="c">🍬</span></div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
-const decorIcon = L.divIcon({ className: "", html: '<div class="decor">🏠</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
-const ghostIcon = (g) => L.divIcon({ className: "", html: `<div class="ghost">${g}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
-
-function offset(lat, lng, north, east) {
-  return [lat + north / 111320, lng + east / (111320 * Math.cos((lat * Math.PI) / 180))];
-}
-
-// Neighbourhood houses with no candy, on a rough street grid around the candy houses
-function drawDecorHouses() {
-  const lat0 = houses.reduce((a, h) => a + h.lat, 0) / houses.length;
-  const lng0 = houses.reduce((a, h) => a + h.lng, 0) / houses.length;
-  let seed = 7;
-  const rand = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-  for (let n = -260; n <= 260; n += 28) {
-    for (let e = -260; e <= 260; e += 24) {
-      if (rand() < 0.3) continue;
-      const [lat, lng] = offset(lat0, lng0, n + (rand() - 0.5) * 18, e + (rand() - 0.5) * 16);
-      if (houses.some((h) => distanceMeters(lat, lng, h.lat, h.lng) < 22)) continue;
-      L.marker([lat, lng], { icon: decorIcon, interactive: false }).addTo(houseLayer);
-    }
-  }
-}
-
-// A few ghosts wandering around the player (just for looks)
-function startGhosts() {
-  const ghosts = ["👻", "👻", "👻"].map((g, i) => {
-    const [lat, lng] = offset(me.lat, me.lng, (i - 1) * 60, 70 - i * 50);
-    return L.marker([lat, lng], { icon: ghostIcon(g), interactive: false }).addTo(map);
-  });
-  setInterval(() => {
-    if (ended) return;
-    for (const g of ghosts) {
-      const p = g.getLatLng();
-      const dirs = [[8, 0], [-8, 0], [0, 8], [0, -8]];
-      const [dn, de] = dirs[Math.floor(Math.random() * 4)];
-      let [lat, lng] = offset(p.lat, p.lng, dn, de);
-      if (distanceMeters(lat, lng, me.lat, me.lng) > 150) [lat, lng] = offset(me.lat, me.lng, (Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120);
-      g.setLatLng([lat, lng]);
-    }
-  }, 900);
-}
-
-// Ask the browser for the player's location once (null if refused / slow)
-function getLocation() {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
-    setTimeout(() => resolve(null), 8000); // don't wait forever if the location pop-up is ignored
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 6000 }
-    );
-  });
-}
-
-// Demo: if there are no candy houses near the player, place a few around them
-const DEMO_SPOTS = [
-  [35, 20, "Pumpkin Porch"], [-40, 30, "Witchy Way"], [25, -45, "Bat Cave"], [-30, -35, "Spooky Manor"],
-  [65, -5, "Ghost Garden"], [-10, 70, "Candy Castle"], [95, 55, "Cauldron Corner"], [-85, -70, "Skeleton Shack"],
-  [-110, 40, "Vampire Villa"], [80, -95, "Mummy Manor"], [15, 120, "Haunted Hut"], [-60, 115, "Zombie Lane"],
-];
-// Without the player's location, keep only the biggest group of houses (never zoom out to the whole province)
-function biggestCluster(list) {
-  let best = list, bestCount = 0;
-  for (const h of list) {
-    const group = list.filter((o) => distanceMeters(h.lat, h.lng, o.lat, o.lng) <= 600);
-    if (group.length > bestCount) { best = group; bestCount = group.length; }
-  }
-  return best;
-}
-
-// Run the demo setup only once even if load and Start both ask for it
-let ensurePromise = null;
-function ensureOnce(pos) {
-  if (!ensurePromise) ensurePromise = ensureHousesNear(pos).catch((e) => { ensurePromise = null; throw e; });
-  return ensurePromise;
-}
-async function ensureHousesNear(pos) {
-  let near = await api(`/houses?lat=${pos.lat}&lng=${pos.lng}&radius=400`);
-  // Only add demo houses if this area has no real volunteer houses yet
-  const realNear = near.filter((h) => !DEMO_SPOTS.some((d) => d[2] === h.name));
-  if (realNear.length === 0 && near.length < DEMO_SPOTS.length) {
-    for (const [n, e, name] of DEMO_SPOTS) {
-      if (near.some((h) => h.name === name)) continue;
-      const [lat, lng] = offset(pos.lat, pos.lng, n, e);
-      await api("/houses", { name, lat: Number(lat.toFixed(6)), lng: Number(lng.toFixed(6)) });
-    }
-    near = await api(`/houses?lat=${pos.lat}&lng=${pos.lng}&radius=400`);
-  }
-  return near;
-}
-const pacIcon = L.divIcon({ className: "", html: '<div class="pac-wrap"><div class="pac"></div></div>', iconSize: [30, 30], iconAnchor: [15, 15] });
-
-const houseLayer = L.layerGroup().addTo(map);
-function drawHouses() {
-  houseLayer.clearLayers();
-  for (const h of houses) {
-    L.circle([h.lat, h.lng], { radius: RADIUS, color: "#ff7518", fillColor: "#8b3dff", weight: 2, fillOpacity: 0.15 }).addTo(houseLayer);
-    markers[h.id] = L.marker([h.lat, h.lng], { icon: candyIcon(collected.has(h.id)) }).addTo(houseLayer).bindTooltip(h.name);
-  }
-  $("total").textContent = houses.length;
-  drawDecorHouses();
-}
-
-function setPos(lat, lng) {
-  me = { lat, lng };
-  if (!meMarker) {
-    meMarker = L.marker([lat, lng], { icon: pacIcon, zIndexOffset: 1000 }).addTo(map);
-    startGhosts();
-  }
-  else meMarker.setLatLng([lat, lng]);
-  const pac = meMarker.getElement() && meMarker.getElement().querySelector(".pac");
-  if (pac) pac.style.transform = `rotate(${heading}deg)`;
-  // only scroll the map when Pac-Man gets near the edge
-  if (!map.getBounds().pad(-0.2).contains([lat, lng])) map.panTo([lat, lng], { animate: true });
-  checkHouses();
-}
-
-function move(dir) {
-  if (!me || ended) return;
-  if (useGps) {
-    // Arrows take over from GPS (handy indoors where GPS is weak)
-    useGps = false;
-    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-    toast("🕹️ Switched to arrow controls");
-  }
-  const [dn, de, rot] = { up: [STEP, 0, 270], down: [-STEP, 0, 90], left: [0, -STEP, 180], right: [0, STEP, 0] }[dir];
-  heading = rot;
-  setPos(me.lat + dn / 111320, me.lng + de / (111320 * Math.cos((me.lat * Math.PI) / 180)));
-}
-
-// ---------- Collecting candy ----------
-function updateNext() {
-  let best = null, bestD = Infinity;
-  for (const h of houses) {
-    if (collected.has(h.id)) continue;
-    const d = distanceMeters(me.lat, me.lng, h.lat, h.lng);
-    if (d < bestD) { best = h; bestD = d; }
-  }
-  if (!best) { $("next").textContent = "All candy collected!"; return; }
-  const dn = best.lat - me.lat, de = (best.lng - me.lng) * Math.cos((me.lat * Math.PI) / 180);
-  const arrow = Math.abs(dn) > Math.abs(de) ? (dn > 0 ? "↑" : "↓") : (de > 0 ? "→" : "←");
-  $("next").textContent = `Next 🍬 ${best.name} ${Math.round(bestD)} m ${arrow}`;
-}
-
-function checkHouses() {
-  if (!runId || ended) return;
-  updateNext();
-  for (const h of houses) {
-    if (collected.has(h.id) || pending.has(h.id)) continue;
-    if (distanceMeters(me.lat, me.lng, h.lat, h.lng) > RADIUS) continue;
-    pending.add(h.id);
-    api(`/runs/${runId}/visit`, { houseId: h.id, lat: me.lat, lng: me.lng })
-      .then((r) => {
-        collected.add(h.id);
-        markers[h.id].setIcon(candyIcon(true));
-        $("score").textContent = collected.size;
-        updateNext();
-        const left = houses.length - collected.size;
-        toast(left === 0 ? "🎉 WAKA WAKA! All candy collected! Hit End session." : `🍬 +1 candy from ${h.name}! ${left} left`);
-        if (routeLine) showRoute();
-      })
-      .catch((e) => toast(e.message))
-      .finally(() => pending.delete(h.id));
-  }
-}
-
-// ---------- Route ----------
-async function showRoute() {
-  if (!me) return;
-  try {
-    const r = await api(`/route?lat=${me.lat}&lng=${me.lng}&runId=${runId}`);
-    if (routeLine) map.removeLayer(routeLine);
-    routeLine = L.polyline([[me.lat, me.lng], ...r.stops.map((s) => [s.lat, s.lng])], { color: "#ff7518", weight: 7, dashArray: "1 14", lineCap: "round" }).addTo(map);
-    toast(r.stops.length ? `🧭 Best route: ${r.totalMeters} m to all ${r.stops.length} houses` : "No houses left!");
-  } catch (e) { toast(e.message); }
-}
-// Fly to the nearest candy not collected yet and point at it
-let findLine = null;
-$("findBtn").onclick = () => {
-  if (!me) return showAllCandy();
-  let best = null, bestD = Infinity;
-  for (const h of houses) {
-    if (collected.has(h.id)) continue;
-    const d = distanceMeters(me.lat, me.lng, h.lat, h.lng);
-    if (d < bestD) { best = h; bestD = d; }
-  }
-  if (!best) return toast("🎉 You already collected all the candy!");
-  if (findLine) map.removeLayer(findLine);
-  findLine = L.polyline([[me.lat, me.lng], [best.lat, best.lng]], { color: "#7cff4f", weight: 4, dashArray: "8 8" }).addTo(map);
-  map.flyToBounds([[me.lat, me.lng], [best.lat, best.lng]], { padding: [90, 90], maxZoom: 18, duration: 0.8 });
-  markers[best.id].openTooltip();
-  toast(`🍬 Nearest candy: ${best.name}, ${Math.round(bestD)} m away. Follow the pink line!`);
-  setTimeout(() => { if (findLine) { map.removeLayer(findLine); findLine = null; } }, 6000);
-};
-$("routeBtn").onclick = () => {
-  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
-  else showRoute();
-};
-
-function showAllCandy() {
-  const pts = houses.map((h) => [h.lat, h.lng]);
-  if (me) pts.push([me.lat, me.lng]);
-  if (pts.length) map.fitBounds(pts, { padding: [70, 70], maxZoom: 18 });
-}
-
-// Show candy on the map right away, before Start
-(async () => {
-  try {
-    const pos = await getLocation();
-    const list = pos ? await ensureOnce(pos) : biggestCluster(await api("/houses"));
-    if (runId) return;
-    houses = list;
-    drawHouses();
-    showAllCandy();
-  } catch (e) { /* server waking up; Start will retry */ }
-})();
-
-// ---------- Start ----------
-$("go").onclick = async () => {
-  const btn = $("go");
-  btn.disabled = true;
-  btn.textContent = "Waking up the haunted server…";
-  player = $("name").value.trim() || "anon";
-  zone = $("zone").value;
-  useGps = $("gps").checked;
-  try {
-    btn.textContent = "Finding your neighbourhood…";
-    const pos = await getLocation();
-    btn.textContent = "Waking up the haunted server…";
-    if (pos) {
-      houses = await ensureOnce(pos);
-      startPos = pos;
-    } else {
-      houses = biggestCluster(await api("/houses"));
-      toast("📍 Location is off, so showing the demo neighbourhood");
-    }
-    const r = await api("/runs/start", { player, zone });
-    runId = r.runId;
-  } catch (e) {
-    toast("Could not reach the server: " + e.message);
-    btn.disabled = false;
-    btn.textContent = "Start trick-or-treating";
-    return;
-  }
-  drawHouses();
-  $("start").hidden = true;
-  map.invalidateSize();
-  $("hud").hidden = false;
-  $("legend").hidden = false;
-  $("bar").hidden = false;
-  startedAt = Date.now();
-  timer = setInterval(() => {
-    const s = Math.floor((Date.now() - startedAt) / 1000);
-    $("time").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-  }, 1000);
-
-  // Arrows always show; in GPS mode pressing one switches to arrow control
-  $("pad").hidden = false;
-  // Start where the player is, or in the middle of the neighbourhood
-  const mid = (k) => houses.reduce((a, h) => a + h[k], 0) / houses.length;
-  const lat = startPos ? startPos.lat : houses.length ? mid("lat") : 43.4723;
-  const lng = startPos ? startPos.lng : houses.length ? mid("lng") : -80.5449;
-  setPos(lat, lng);
-  showAllCandy();
-  if (useGps && navigator.geolocation) {
-    toast("📍 Following your GPS. Press an arrow to move manually.");
-    watchId = navigator.geolocation.watchPosition(
-      (p) => useGps && setPos(p.coords.latitude, p.coords.longitude),
-      (err) => toast("GPS error: " + err.message),
-      { enableHighAccuracy: true, maximumAge: 2000 }
-    );
-  } else {
-    useGps = false;
-    toast("Use the arrows to walk to the 🍬 houses!");
-  }
-};
-
-document.querySelectorAll("#pad button").forEach((b) => (b.onclick = () => move(b.dataset.dir)));
-document.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "INPUT") return;
-  const dir = { ArrowUp: "up", w: "up", ArrowDown: "down", s: "down", ArrowLeft: "left", a: "left", ArrowRight: "right", d: "right" }[e.key];
-  if (dir) { e.preventDefault(); move(dir); }
-});
-
-// ---------- End session ----------
-$("endBtn").onclick = async () => {
-  const btn = $("endBtn");
-  if (!btn.classList.contains("sure")) {
-    btn.classList.add("sure");
-    btn.textContent = "Tap again to end";
-    setTimeout(() => { btn.classList.remove("sure"); btn.textContent = "🏁 End session"; }, 3000);
-    return;
-  }
-  try {
-    const r = await api(`/runs/${runId}/finish`, {});
-    ended = true;
-    clearInterval(timer);
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    $("pad").hidden = true;
-    $("bar").hidden = true;
-    $("summary").textContent = `${player}, you collected ${r.houses} candy in ${Math.floor(r.seconds / 60)}m ${r.seconds % 60}s!`;
-    const board = await api(`/leaderboard?zone=${zone}`);
-    const ol = $("board");
-    ol.innerHTML = "";
-    board.slice(0, 10).forEach((row) => {
-      const li = document.createElement("li");
-      li.textContent = `${row.player}: ${row.houses} 🍬 in ${row.seconds}s`;
-      if (row.player === player && row.houses === r.houses && row.seconds === r.seconds) li.className = "me";
-      ol.appendChild(li);
-    });
-    $("results").hidden = false;
-  } catch (e) { toast(e.message); }
-};
-$("again").onclick = () => location.reload();
-
-// ---------- Community chat ----------
-async function loadChat() {
-  try {
-    const list = await api(`/chat?zone=${zone}`);
-    const box = $("msgs");
-    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-    box.innerHTML = "";
-    if (!list.length) {
-      const p = document.createElement("p");
-      p.className = "empty";
-      p.textContent = "No messages yet. Tell your neighbours which house has the best candy!";
-      box.appendChild(p);
-    }
-    for (const m of list) {
-      const div = document.createElement("div");
-      div.className = "msg";
-      const b = document.createElement("b");
-      b.textContent = m.player;
-      const small = document.createElement("small");
-      small.textContent = new Date(m.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-      div.append(b, small, document.createElement("br"), document.createTextNode(m.text));
-      box.appendChild(div);
-    }
-    if (atBottom) box.scrollTop = box.scrollHeight;
-  } catch (e) { /* keep old messages */ }
-}
-function openChat() {
-  $("chat").hidden = false;
-  loadChat().then(() => ($("msgs").scrollTop = $("msgs").scrollHeight));
-  clearInterval(chatTimer);
-  chatTimer = setInterval(loadChat, 3000);
-  $("chatText").focus();
-}
-$("chatBtn").onclick = () => ($("chat").hidden ? openChat() : $("chatClose").onclick());
-$("resChat").onclick = openChat;
-$("chatClose").onclick = () => { $("chat").hidden = true; clearInterval(chatTimer); };
-$("chatForm").onsubmit = async (e) => {
-  e.preventDefault();
-  const text = $("chatText").value.trim();
-  if (!text) return;
-  try {
-    await api("/chat", { player, zone, text });
-    $("chatText").value = "";
-    await loadChat();
-    $("msgs").scrollTop = $("msgs").scrollHeight;
-  } catch (err) { toast(err.message); }
-};
-</script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
