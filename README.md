@@ -169,7 +169,7 @@ Built at ElleHacks by a team of four.
 - Anusha Chandra: backend
 - Homaira Hotak: backend
 - Urooj Ahmed: frontend
-- Sofia Pimenovsky: frontend
+- Sophia Pimenovsky: frontend
 
 ## Credits
 
