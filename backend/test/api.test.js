@@ -440,3 +440,12 @@ test("spookiest house: only visitors vote, and the top house gets the badge", as
   assert.equal(list[0].votes, 2);
   assert.equal(list[0].spookiest, true);
 });
+
+test("finishing a long run with its whole race path isn't rejected as too large", async () => {
+  const t = (await onBots("POST", "/players", { body: { name: "LongRun", pin: "1234" } })).body.token;
+  const run = (await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: t })).body;
+  const trail = Array.from({ length: 2500 }, (_, i) => [i * 0.5, 43.472345 + i * 1e-6, -80.544912]);
+  const fin = await onBots("POST", `/runs/${run.runId}/finish`, { body: { trail }, token: t });
+  assert.equal(fin.status, 200, JSON.stringify(fin.body).slice(0, 100));
+  assert.ok(fin.body.raceToken);
+});

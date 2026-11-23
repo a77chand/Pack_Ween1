@@ -1041,6 +1041,7 @@ function beginRun(run, x, y) {
   };
   S.finishing = false;
   S.clock = 0;
+  lastCheck = lastWaka = lastDotSound = -1; // these count in S.clock, which restarts every run
   S.invulnUntil = 2;
   S.userPannedAt = 0;
   S.lastPing = null;
@@ -1134,8 +1135,17 @@ async function finishRun({ levelClear = false, gameOver = false } = {}) {
   if (S.finishing || !S.run) return;
   S.finishing = true;
   try {
-    const trail = S.trail.slice(-2500);
-    const r = await api(`/runs/${S.run.runId}/finish`, { body: S.run.mode === "arcade" ? { trail } : {} });
+    // the race path: one point every half second is plenty for a smooth replay
+    const trail = [];
+    for (const p of S.trail) if (!trail.length || p[0] - trail[trail.length - 1][0] >= 0.5) trail.push(p);
+    const finish = (body) => api(`/runs/${S.run.runId}/finish`, { body });
+    let r;
+    try {
+      r = await finish(S.run.mode === "arcade" ? { trail: trail.slice(-2500) } : {});
+    } catch (e) {
+      if (e.status !== 413) throw e;
+      r = await finish({}); // never get stuck over the replay: finish without it
+    }
     r.runId = S.run.runId;
     r.raceToken = r.raceToken || null;
     stopPlaying();
@@ -1616,6 +1626,9 @@ document.addEventListener("keydown", (e) => {
   b?.classList.add("on");
   setTimeout(() => b?.classList.remove("on"), 120);
 });
+
+// Test hook: ?debug exposes the game state so automated browser tests can drive full levels
+if (new URLSearchParams(location.search).has("debug")) window.__packween = { S, caught };
 
 // ---------- Boot ----------
 setInterval(loadActivity, 20000);

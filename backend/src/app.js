@@ -70,7 +70,10 @@ function createApp({
   const app = express();
   app.set("trust proxy", 1);
   app.use(cors()); // open to all origins so any front end can call the API
-  app.use(express.json({ limit: "20kb" }));
+  // Small JSON bodies everywhere, except finishing a run, which carries its race path
+  const smallJson = express.json({ limit: "20kb" });
+  const finishJson = express.json({ limit: "200kb" });
+  app.use((req, res, next) => (/^\/runs\/\d+\/finish$/.test(req.path) ? finishJson : smallJson)(req, res, next));
   app.use(express.static(publicDir));
 
   const loginLimit = limiter(20, 60 * 1000, now);
