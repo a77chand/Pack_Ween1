@@ -2,11 +2,11 @@
 
 **Pac-Man on your real streets.** Trick-or-treat around your actual neighbourhood, collect candy from volunteer houses, dodge ghosts that hunt you through the streets, and race your neighbours up the leaderboard.
 
-**▶ Play it live: https://pack-ween.onrender.com**
+**▶ Play it live: https://a77chand.github.io/Pack_Ween1/**
 
 **Demo login:** name `Demo`, PIN `1234` (or tap *"Just looking? Use the demo account"* on the start screen).
 
-<sub>Hosted on Render's free tier and kept awake by a scheduled ping, so it should load straight away. If it ever does sleep, the first load takes 20–60 seconds.</sub>
+<sub>The page is served by GitHub Pages, so it opens instantly. The game server runs on Render's free tier at pack-ween.onrender.com and pings itself every 10 minutes to stay awake. After a fresh deploy, the first load can still take up to a minute while it wakes.</sub>
 
 ![Pack_Ween gameplay: a pumpkin Pac-Man on a dark street map, candy houses with claim rings, four coloured ghosts and a trail of Pac-dots along the streets](docs/screenshot.jpg)
 
@@ -64,7 +64,7 @@ Play it two ways:
 
 ## How to play
 
-1. Open **https://pack-ween.onrender.com** and allow location access. Without it you get the demo neighbourhood in Waterloo.
+1. Open **https://a77chand.github.io/Pack_Ween1/** and allow location access. Without it you get the demo neighbourhood in Waterloo.
 2. Sign in as **Demo / 1234**, or enter your own name and any 4-digit PIN. A new name is claimed for you, the PIN keeps it yours on the leaderboard, and returning players use the same PIN.
 3. Pick **Arcade · At home** or **Walk · Ranked**, then **Start trick-or-treating**.
 4. Collect every 🏠🍬. **🍬 Find** draws a green line to the nearest one and **🧭 Route** lays Pac-dots through all of them.
