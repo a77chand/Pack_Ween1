@@ -31,6 +31,13 @@ Play it two ways:
 - 🟢 **Live multiplayer.** Real players mid-run nearby show up on your map in real time.
 - 🌕 **Witching hour.** Every point counts double from 9 to 10 pm.
 
+**More ways to play:**
+- 🎥 **3D camera.** Tilt the map into a perspective view of the neon city, with the sprites standing upright.
+- 📷 **AR ghosts.** Point your phone camera down the street to see ghosts and candy houses floating where they really are, using the compass, with a radar.
+- ⚔️ **Race-me links.** Share an Arcade result and friends race a red replay of your exact run, and see who won.
+- 👪 **Parent safety mode (Walk).** A private live-location link a parent can follow on a map, curfew reminders, and a route that avoids busy roads (OpenStreetMap road classes).
+- 🏆 **Spookiest house.** Players who collected a house's candy can vote for its decorations, and the top-voted house on the street gets a trophy.
+
 **Under the hood:**
 
 - 🗺️ **Real streets as the maze.** Streets and footpaths from OpenStreetMap are compacted into a graph (largest connected piece only, straight stretches simplified). Every candy house gets a "driveway" onto it, so every house is reachable.
@@ -85,7 +92,7 @@ Needs [Node.js](https://nodejs.org/) 22.13 or newer.
 cd backend
 npm install
 npm start        # http://localhost:4000
-npm test         # 21 tests
+npm test         # 24 tests
 ```
 
 | Environment variable | Default | What it does |
@@ -124,6 +131,10 @@ The backend serves the game and a JSON API. Full request and response examples a
 | GET / POST | `/chat` | Read and post neighbourhood chat (demo players reply) |
 | GET | `/activity?lat=&lng=` | Who's playing near you and what just happened |
 | GET | `/live?lat=&lng=` | Real players mid-run nearby and their latest positions |
+| GET | `/runs/:id/race` | A finished Arcade run's path, for race-me links |
+| POST | `/runs/:id/share` | Make a private live-location link (optional `curfew`) |
+| GET | `/watch/:token` | What the parent page shows: position, candy, curfew |
+| POST | `/houses/:id/vote` | "Spookiest decorations" vote (only after collecting its candy) |
 
 ## Project structure
 
@@ -146,6 +157,8 @@ backend/
     js/rivals.js        Other players' Pac-Men running between the houses
     js/fx.js            Neon maze, street dots, fog of war, mist and lightning (canvas)
     js/arcade.js        Score, skins, power-up houses, daily challenge, replays
+    js/ar.js            Camera AR view of ghosts and houses
+    watch.html          The parent's live-location page
     js/route.js         Street routes and Pac-dots
     js/sound.js         Web Audio sound effects
   osm/waterloo.json     Pre-baked street map for the demo neighbourhood

@@ -44,7 +44,7 @@ export class Rivals {
     const k = Math.floor(Math.random() * this.targets.length);
     const [x, y] = this.targets[k];
     const pac = el("div", { class: "pac rival-pac" }, el("div", { class: "body" }));
-    const icon = el("div", { class: "rival", style: `--pc:${p.color}` }, pac, el("span", { class: "rival-name" }, p.name));
+    const icon = el("div", { class: "bb" }, el("div", { class: "rival", style: `--pc:${p.color}` }, pac, el("span", { class: "rival-name" }, p.name)));
     const r = {
       name: p.name,
       x, y, hx: 1, hy: 0,

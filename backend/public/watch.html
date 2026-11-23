@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0612">
+<meta name="robots" content="noindex">
+<title>Pack_Ween · Live location</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+<style>
+  :root { --bg: #0d0612; --panel: #1a0b26; --line: #4a2370; --orange: #ff7518; --purple: #8b3dff; --green: #7cff4f; --gold: #ffc93c; --red: #d7263d; --text: #e8d9f5; --muted: #a78fc9; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #map { position: fixed; inset: 0; }
+  .leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.95) contrast(1.15) saturate(.6); }
+  .panel { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 1000; width: min(420px, calc(100% - 32px)); background: rgba(26, 11, 38, .96); border: 2px solid var(--orange); border-radius: 16px; padding: 14px 16px; box-shadow: 0 0 24px rgba(255, 117, 24, .4); display: flex; flex-direction: column; gap: 8px; }
+  h1 { margin: 0; font: 13px/1.5 "Press Start 2P", monospace; color: var(--orange); }
+  .row { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+  .muted { color: var(--muted); }
+  .status { font-weight: 700; }
+  .ok { color: var(--green); } .warn { color: var(--gold); } .bad { color: #ff7f92; }
+  .kid { width: 22px; height: 22px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 4px rgba(255, 117, 24, .35), 0 0 18px var(--orange); }
+  .note { font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<section class="panel" aria-live="polite">
+  <h1>🎃 <span id="who">Loading…</span></h1>
+  <div class="row"><span class="status" id="status">Connecting…</span><span class="muted" id="seen"></span></div>
+  <div class="row"><span>🍬 <b id="candy">0</b> houses</span><span>🚶 <span id="dist">0 m</span></span></div>
+  <div class="row"><span id="curfew" class="muted"></span></div>
+  <div class="note">This private link shows where they are while their Pack_Ween walk is on. It stops when the walk ends.</div>
+</section>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const token = location.hash.slice(1);
+  const $ = (id) => document.getElementById(id);
+  const map = L.map("map", { zoomControl: false }).setView([43.4723, -80.5449], 16);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 19, maxNativeZoom: 18, attribution: "Tiles &copy; Esri &middot; Map data &copy; OpenStreetMap contributors",
+  }).addTo(map);
+  const marker = L.marker([0, 0], { icon: L.divIcon({ className: "", html: '<div class="kid"></div>', iconSize: [22, 22], iconAnchor: [11, 11] }) });
+  const trail = L.polyline([], { color: "#ff7518", weight: 4, opacity: .7, dashArray: "2 8" }).addTo(map);
+  let first = true, warned = false;
+  const ago = (t) => { const s = Math.round((Date.now() - t) / 1000); return s < 60 ? `${s}s ago` : `${Math.round(s / 60)} min ago`; };
+  const clock = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  async function poll() {
+    if (!/^[a-f0-9]{32}$/.test(token)) { $("who").textContent = "Link not valid"; $("status").textContent = "Ask for a new link."; return; }
+    let w;
+    try {
+      const r = await fetch(`/watch/${token}`);
+      if (!r.ok) { $("who").textContent = "Link not found"; $("status").textContent = "This walk may have been on an old server."; return; }
+      w = await r.json();
+    } catch { $("status").textContent = "Offline, retrying…"; return; }
+    $("who").textContent = w.player;
+    $("candy").textContent = `${w.houses}/${w.total}`;
+    $("dist").textContent = w.meters >= 1000 ? `${(w.meters / 1000).toFixed(1)} km` : `${w.meters} m`;
+    if (w.position) {
+      const ll = [w.position.lat, w.position.lng];
+      marker.setLatLng(ll).addTo(map);
+      trail.addLatLng(ll);
+      if (first) { map.setView(ll, 17); first = false; }
+      $("seen").textContent = `updated ${ago(w.position.time)}`;
+    }
+    const stale = w.position && Date.now() - w.position.time > 2 * 60 * 1000;
+    $("status").textContent = w.ended ? "✅ Walk finished" : stale ? "⚠️ No update for a while" : "🟢 Out trick-or-treating";
+    $("status").className = `status ${w.ended ? "ok" : stale ? "warn" : "ok"}`;
+    if (w.curfew) {
+      const left = w.curfew - Date.now();
+      $("curfew").textContent = left > 0 ? `🏠 Home by ${clock(w.curfew)} (${Math.ceil(left / 60000)} min left)` : `🏠 Curfew was ${clock(w.curfew)}`;
+      $("curfew").className = left <= 0 && !w.ended ? "bad" : left < 15 * 60000 ? "warn" : "muted";
+      if (left <= 0 && !w.ended && !warned) { warned = true; try { navigator.vibrate?.([200, 100, 200]); } catch {} }
+    }
+  }
+  poll();
+  setInterval(poll, 5000);
+</script>
+</body>
+</html>

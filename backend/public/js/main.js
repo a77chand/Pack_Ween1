@@ -10,6 +10,7 @@ import { StreetGraph, Walker } from "./streets.js";
 import { Ghosts } from "./ghosts.js";
 import { Rivals } from "./rivals.js";
 import { FxLayer } from "./fx.js";
+import { ArView } from "./ar.js";
 import {
   POINTS, COMBO_WINDOW, START_LIVES, SKINS, PERKS, perkFor, savedSkin, saveSkin, pacHtml,
   isWitchingHour, todayKey, dailyTwist, bestScore, saveBest, loadReplay, saveReplay,
@@ -124,9 +125,10 @@ function houseIcon(h) {
   const cls = ["house", h.visited && "done", h.fullSize && "power", h.perk && "perk", h.justClaimed && "claim"].filter(Boolean).join(" ");
   const badge = h.verified ? '<span class="v" title="Verified">✓</span>' : "";
   const treat = h.fullSize ? "🍫" : h.perk ? PERKS[h.perk].icon : "🍬";
+  const trophy = h.spookiest ? '<span class="spooky-badge" title="Spookiest house">🏆</span>' : "";
   return L.divIcon({
-    className: "",
-    html: `<div class="${cls}">${badge}<span>🏠</span><span class="c">${treat}</span></div>`,
+    className: "house-icon",
+    html: `<div class="bb"><div class="${cls}">${badge}${trophy}<span>🏠</span><span class="c">${treat}</span></div></div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
   });
@@ -177,6 +179,9 @@ function openHousePopup(h) {
     el("h4", {}, h.name),
     tag,
     h.fullSize && el("span", { class: "tag pw" }, "🍫 Full-size bars"),
+    h.spookiest && el("span", { class: "tag ok" }, "🏆 Spookiest on the street"),
+    !h.demo && el("div", { class: "muted small" }, `🎃 ${h.votes || 0} spooky vote${h.votes === 1 ? "" : "s"}`),
+    !h.demo && h.visited && !h.mine && S.profile && el("button", { onclick: () => voteSpooky(h) }, "🎃 Vote: spookiest decorations!"),
     h.visited && el("div", { class: "small" }, "✅ You got this candy"),
     here != null && !h.visited && el("div", { class: "muted small" }, `${fmtDist(here)} away`),
     h.demo && el("div", { class: "muted small" }, "Nobody is handing out candy here yet, so these are demo houses. Hand out candy to put a real one on the map!"),
@@ -192,6 +197,16 @@ async function reportHouse(h) {
     const r = await api(`/houses/${h.ref}/report`, { body: pos });
     map.closePopup();
     toast(r.hidden ? "Thanks! That house is now hidden." : "Thanks for the report 👻", "good");
+  } catch (e) { toast(e.message, "bad"); }
+}
+
+async function voteSpooky(h) {
+  try {
+    const r = await api(`/houses/${h.ref}/vote`, { body: {} });
+    h.votes = r.votes;
+    map.closePopup();
+    sfx.candy();
+    toast(`🎃 Voted! ${h.name} has ${r.votes} spooky vote${r.votes === 1 ? "" : "s"}`, "good");
   } catch (e) { toast(e.message, "bad"); }
 }
 
@@ -465,7 +480,7 @@ let pacEl = null, lastTf = "", lastMoving = null;
 function drawPac() {
   const p = S.pac;
   S.pacMarker.setLatLng(toLatLng(p.x, p.y));
-  pacEl = pacEl || S.pacMarker.getElement()?.firstElementChild;
+  pacEl = pacEl || S.pacMarker.getElement()?.querySelector(".pac");
   if (!pacEl) return;
   if (p.moving !== lastMoving) { pacEl.classList.toggle("idle", !p.moving); lastMoving = p.moving; }
   const theta = (-Math.atan2(p.hy, p.hx) * 180) / Math.PI;
@@ -709,12 +724,13 @@ function showRoute(quiet) {
   const open = S.houses.filter((h) => !h.visited);
   if (!open.length) { setRoute(false); return; }
   const start = S.graph ? (S.pac.walker ? S.pac.walker.to : S.graph.nearestNode(S.pac.x, S.pac.y)) : -1;
-  const r = planRoute(S.graph, [S.pac.x, S.pac.y], start, open);
+  const safe = S.run?.mode === "gps"; // walking: keep to quiet streets
+  const r = planRoute(S.graph, [S.pac.x, S.pac.y], start, open, safe);
   for (const [x, y] of sampleDots(r.path, 11)) {
     const m = L.circleMarker(toLatLng(x, y), { renderer: dotRenderer, radius: 3.2, weight: 0, fillColor: "#ffb070", fillOpacity: 1, interactive: false }).addTo(routeLayer);
     S.dots.push({ x, y, m });
   }
-  if (!quiet) toast(`🧭 Best route: ${fmtDist(r.meters)} through ${open.length} house${open.length === 1 ? "" : "s"}`);
+  if (!quiet) toast(`🧭 ${safe ? "Safe route (avoids busy roads)" : "Best route"}: ${fmtDist(r.meters)} through ${open.length} house${open.length === 1 ? "" : "s"}`);
 }
 
 function setRoute(on) {
@@ -863,11 +879,12 @@ function startReplay() {
   replayMarker?.remove();
   replayMarker = null;
   replayIdx = 0;
-  S.replay = S.run.mode === "arcade" ? loadReplay(areaKey()) : null;
+  S.replay = S.run.mode !== "arcade" ? null : S.race && S.game.level === 1 ? S.race : loadReplay(areaKey());
   if (!S.replay?.trail?.length) return;
   const [, lat, lng] = S.replay.trail[0];
+  const label = S.replay === S.race ? `⚔️ ${escapeText(S.race.player)} ${fmtTime(S.race.seconds)}` : `Your best ${fmtTime(S.replay.seconds)}`;
   replayMarker = L.marker([lat, lng], {
-    icon: L.divIcon({ className: "pac-icon", html: `<div class="replay-pac"><div class="pac idle" style="--pc:#e8d9f5"><div class="body"></div></div><span>Your best ${fmtTime(S.replay.seconds)}</span></div>`, iconSize: [32, 32], iconAnchor: [16, 16] }),
+    icon: L.divIcon({ className: "pac-icon", html: `<div class="bb"><div class="replay-pac${S.replay === S.race ? " race" : ""}"><div class="pac idle" style="--pc:${S.replay === S.race ? "#ff3b5c" : "#e8d9f5"}"><div class="body"></div></div><span>${label}</span></div></div>`, iconSize: [32, 32], iconAnchor: [16, 16] }),
     interactive: false, keyboard: false, zIndexOffset: 700,
   }).addTo(map);
 }
@@ -946,9 +963,12 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- Starting, resuming and finishing ----------
-async function startGame({ daily = false, next = false } = {}) {
+async function startGame({ daily = false, next = false, race = null } = {}) {
   sfx.unlock();
+  if (!next) readParentOptions();
   if (!next) S.game = newGame(daily);
+  S.race = race;
+  if (race) { setMode("arcade"); await loadNeighbourhood(race.start); }
   if (daily) { setMode("arcade"); if (!S.isDefault) await loadNeighbourhood(null); }
   const btn = $("go");
   if (!(await ensureSignedIn())) return;
@@ -956,7 +976,7 @@ async function startGame({ daily = false, next = false } = {}) {
   const reset = () => { btn.disabled = false; btn.textContent = "Start trick-or-treating"; };
   try {
     btn.textContent = "Finding you…";
-    let pos = S.game.daily ? null : S.located;
+    let pos = S.race ? S.race.start : S.game.daily ? null : S.located;
     if (next) pos = { lat: toLatLng(S.pac.x, S.pac.y)[0], lng: toLatLng(S.pac.x, S.pac.y)[1] };
     if (S.mode === "gps") {
       pos = (await locate(12000)) || pos;
@@ -1055,10 +1075,15 @@ function beginRun(run, x, y) {
 
   S.timers.push(setInterval(updateClock, 250), setInterval(ping, PING_EVERY), setInterval(pollChatBadge, 15000), setInterval(pollLive, 2000));
   $("witch").hidden = !isWitchingHour();
+  $("arBtn").hidden = false;
+  $("tiltBtn").hidden = run.mode !== "arcade" || !S.graph;
+  S.curfewWarned = 0;
+  if (run.mode === "gps" && S.parentShare) S.timers.push(setInterval(checkCurfew, 15000));
   updateClock();
   if (run.mode === "gps") {
     startGps();
     keepAwake();
+    if (S.parentShare) setTimeout(shareWithParent, 600);
     toast("🚶 Walk to the glowing houses! Watch the road, not your phone.", "info", 4000);
   } else {
     toast(S.graph ? "🕹️ Arrow keys / WASD or the D-pad. Run the streets!" : "🕹️ Arrow keys / WASD or the D-pad to move", "info", 3500);
@@ -1087,6 +1112,8 @@ function stopPlaying() {
   findLine?.remove();
   setRoute(false);
   for (const id of ["hud", "tools", "bar", "pad", "legend", "banner"]) $(id).hidden = true;
+  setTilt(false);
+  ar?.close();
   $("banner").className = "";
   document.body.classList.remove("playing", "powered");
 }
@@ -1095,8 +1122,9 @@ async function finishRun({ levelClear = false, gameOver = false } = {}) {
   if (S.finishing || !S.run) return;
   S.finishing = true;
   try {
-    const r = await api(`/runs/${S.run.runId}/finish`, { body: {} });
-    const trail = S.trail;
+    const trail = S.trail.slice(-2500);
+    const r = await api(`/runs/${S.run.runId}/finish`, { body: S.run.mode === "arcade" ? { trail } : {} });
+    r.runId = S.run.runId;
     stopPlaying();
     if (levelClear && !r.flagged) {
       if (saveReplay(areaKey(), r.seconds, trail)) toast("👻 New best time here! Your replay will race you next time.", "good", 3500);
@@ -1157,6 +1185,10 @@ function showResults(r) {
   r.daily = g.daily ? { key: g.dayKey, twist: g.twist.label } : null;
   const bestKey = g.daily ? `daily.${g.dayKey}` : r.mode;
   r.newBest = saveBest(bestKey, g.score);
+  if (S.race && S.race.runId !== r.runId) {
+    const won = r.houses > S.race.houses || (r.houses === S.race.houses && r.seconds < S.race.seconds);
+    toast(won ? `⚔️ You beat ${S.race.player}!` : `⚔️ ${S.race.player} wins this one. Rematch?`, won ? "good" : "warn", 5000);
+  }
   $("resTitle").textContent = r.gameOver ? "💀 Game over!" : r.newBest && g.score ? "🏆 New high score!" : all ? "🎉 All candy collected!" : "🏁 Run complete!";
   const flag = $("resFlag");
   flag.hidden = !r.flagged;
@@ -1227,8 +1259,8 @@ async function share() {
   if (!r) return;
   const head = r.daily ? `🎃 Pack_Ween Daily ${r.daily.key} (${r.daily.twist})` : `🎃 Pack_Ween · level ${r.level}`;
   const candy = "🟧".repeat(r.houses) + "⬛".repeat(Math.max(0, r.total - r.houses));
-  const text = `${head}\n⭐ ${r.score.toLocaleString()} · ${r.houses}/${r.total} 🍬 · ⏱ ${fmtTime(r.seconds)}${r.ghosts ? ` · 👻×${r.ghosts}` : ""}\n${candy}\nCan you beat me?`;
-  const url = location.origin + location.pathname;
+  const text = `${head}\n⭐ ${r.score.toLocaleString()} · ${r.houses}/${r.total} 🍬 · ⏱ ${fmtTime(r.seconds)}${r.ghosts ? ` · 👻×${r.ghosts}` : ""}\n${candy}\n${r.mode === "arcade" ? "⚔️ Race my exact run:" : "Can you beat me?"}`;
+  const url = r.mode === "arcade" && !r.flagged && r.runId ? `${location.origin}/?race=${r.runId}` : location.origin + location.pathname;
   try {
     if (navigator.share) await navigator.share({ title: "Pack_Ween", text, url });
     else { await navigator.clipboard.writeText(`${text} ${url}`); toast("Copied to clipboard!", "good"); }
@@ -1364,17 +1396,102 @@ function feedToast(feed) {
   }
 }
 
+// ---------- 3D camera ----------
+// Tilts the map into a perspective view; sprites counter-rotate to stand upright
+function setTilt(on) {
+  document.body.classList.toggle("tilt", on);
+  $("tiltBtn").setAttribute("aria-pressed", String(on));
+  if (on) map.dragging.disable(); else map.dragging.enable();
+  map.invalidateSize({ pan: false });
+  if (on && S.pac) map.setView(toLatLng(S.pac.x, S.pac.y), map.getZoom(), { animate: false });
+}
+
+// ---------- AR ----------
+let ar = null;
+function openAr() {
+  ar = new ArView({
+    getWorld: () => S.pac && {
+      me: S.pac,
+      ghosts: (S.ghosts?.list || []).map((g) => ({ x: g.x, y: g.y, color: g.kind.color, name: g.kind.name, state: g.state })),
+      houses: S.houses.map((h) => ({ x: h.x, y: h.y, name: h.name, visited: h.visited, icon: h.fullSize ? "🍫" : "🍬" })),
+    },
+  });
+  ar.open();
+}
+
+// ---------- Parent safety ----------
+async function shareWithParent() {
+  try {
+    const r = await api(`/runs/${S.run.runId}/share`, { body: S.curfew ? { curfew: S.curfew } : {} });
+    const url = `${location.origin}/watch.html#${r.token}`;
+    let close = null;
+    const copy = el("button", { class: "primary", onclick: async () => {
+      try {
+        if (navigator.share) await navigator.share({ title: "Follow my trick-or-treating", url });
+        else { await navigator.clipboard.writeText(url); toast("Link copied!", "good"); }
+      } catch { /* closed */ }
+    } }, "📤 Send to a parent");
+    close = openModal(el("div", { class: "stack" },
+      el("h2", {}, "👪 Live location link"),
+      el("p", {}, "Anyone with this link can see where you are until this walk ends."),
+      el("input", { value: url, readonly: true, onfocus: (e) => e.target.select() }),
+      S.curfew && el("p", { class: "hint" }, `🏠 Curfew ${new Date(S.curfew).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}: you'll get reminders.`),
+      el("div", { class: "row" }, el("button", { onclick: () => close() }, "Done"), copy)));
+  } catch (e) { toast(e.message, "bad"); }
+}
+
+function checkCurfew() {
+  if (!S.curfew) return;
+  const left = (S.curfew - Date.now()) / 60000;
+  if (left <= 0 && S.curfewWarned < 2) { S.curfewWarned = 2; sfx.warn(); vibrate([300, 100, 300]); toast("🏠 Curfew! Time to head home.", "bad", 8000); }
+  else if (left <= 15 && S.curfewWarned < 1) { S.curfewWarned = 1; sfx.warn(); toast(`🏠 ${Math.ceil(left)} minutes until curfew`, "warn", 6000); }
+}
+
+// ---------- Race me ----------
+const escapeText = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+async function loadRaceInvite() {
+  const id = new URLSearchParams(location.search).get("race");
+  if (!/^\d+$/.test(id || "")) return;
+  try {
+    const race = await api(`/runs/${id}/race`);
+    S.raceInvite = race;
+    $("raceText").textContent = `${race.player} challenged you: ${race.houses} 🍬 in ${fmtTime(race.seconds)}. Race their exact run!`;
+    $("raceBox").hidden = false;
+  } catch { toast("That race link has expired", "warn"); }
+}
+
 // ---------- Wiring ----------
 function setMode(mode) {
   S.mode = mode;
   store.set(MODE_KEY, mode);
   document.querySelectorAll(".mode").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === mode)));
+  $("walkOpts").hidden = mode !== "gps";
 }
 document.querySelectorAll(".mode").forEach((b) => (b.onclick = () => { sfx.click(); setMode(b.dataset.mode); }));
 setMode(S.mode);
 
 $("go").onclick = () => startGame();
 $("dailyBtn").onclick = () => startGame({ daily: true });
+$("raceGo").onclick = () => { $("raceBox").hidden = true; startGame({ race: S.raceInvite }); };
+$("tiltBtn").onclick = () => setTilt(!document.body.classList.contains("tilt"));
+$("arBtn").onclick = openAr;
+$("parentShare").onchange = (e) => { $("curfewRow").hidden = !e.target.checked; };
+// walk-mode options are read when a run starts
+const readParentOptions = () => {
+  S.parentShare = S.mode === "gps" && $("parentShare").checked;
+  const [h, m] = ($("curfewTime").value || "").split(":").map(Number);
+  if (S.parentShare && Number.isFinite(h)) {
+    const d = new Date();
+    d.setHours(h, m || 0, 0, 0);
+    if (d < new Date()) d.setDate(d.getDate() + 1);
+    S.curfew = d.getTime();
+    if (S.curfew - Date.now() > 12 * 60 * 60 * 1000) {
+      S.curfew = null; // more than 12 hours away: almost certainly a typo, so share without one
+      toast("Curfew is over 12 hours away, so the link goes out without one", "warn", 4000);
+    }
+  } else S.curfew = null;
+};
 $("signIn").onsubmit = (e) => e.preventDefault();
 $("name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("pin").focus(); } });
 $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); startGame(); } });
@@ -1476,6 +1593,7 @@ document.addEventListener("keydown", (e) => {
 
 // ---------- Boot ----------
 setInterval(loadActivity, 20000);
+loadRaceInvite();
 (async () => {
   loadProfile();
   // Show the default neighbourhood straight away, then move to the player once located

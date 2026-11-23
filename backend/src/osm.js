@@ -27,6 +27,7 @@ const MAX_BUILDINGS = 1500;
 // because they would draw a second line next to every street.
 const ROADS = /^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|pedestrian|service|footway|path|steps|cycleway)$/;
 const SKIP_SERVICE = /^(parking_aisle|driveway|drive-through|emergency_access)$/;
+const MAJOR = /^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link)$/;
 const SKIP_FOOTWAY = /^(sidewalk|traffic_island)$/;
 const SKIP_ACCESS = /^(private|no)$/;
 const SKIP_BUILDINGS = /^(no|roof|shed|garage|garages|carport|bridge|service|hut|kiosk|transformer_tower|construction|ruins|greenhouse)$/;
@@ -97,12 +98,14 @@ function compact(json, lat0, lng0) {
   const idToIndex = new Map();
   const xy = [];
   const adj = [];
+  const majorRaw = new Set(); // node pairs that are part of a busy road
 
   for (const el of json.elements || []) {
     if (el.type !== "way" || !el.tags || !el.geometry || !el.nodes) continue;
     const t = el.tags;
     if (!ROADS.test(t.highway || "") || SKIP_SERVICE.test(t.service || "") || SKIP_FOOTWAY.test(t.footway || "") ||
         SKIP_ACCESS.test(t.access || "") || t.area === "yes") continue;
+    const isMajor = MAJOR.test(t.highway);
     let prev = -1;
     for (let k = 0; k < el.nodes.length; k++) {
       const g = el.geometry[k];
@@ -114,7 +117,11 @@ function compact(json, lat0, lng0) {
         xy.push(toXY(g.lat, g.lon));
         adj.push(new Set());
       }
-      if (prev >= 0 && prev !== i) { adj[prev].add(i); adj[i].add(prev); }
+      if (prev >= 0 && prev !== i) {
+        adj[prev].add(i);
+        adj[i].add(prev);
+        if (isMajor) majorRaw.add(prev < i ? `${prev},${i}` : `${i},${prev}`);
+      }
       prev = i;
     }
   }
@@ -148,10 +155,10 @@ function compact(json, lat0, lng0) {
   const edges = [];
   const walked = new Set();
   const ekey = (a, b) => (a < b ? `${a},${b}` : `${b},${a}`);
-  const addEdge = (a, b) => {
+  const addEdge = (a, b, major) => {
     if (a === b) return;
     const k = ekey(a, b);
-    if (!edgeKeys.has(k)) { edgeKeys.add(k); edges.push([a, b]); }
+    if (!edgeKeys.has(k)) { edgeKeys.add(k); edges.push([a, b, major ? 1 : 0]); }
   };
 
   for (let start = 0; start < xy.length; start++) {
@@ -177,12 +184,14 @@ function compact(json, lat0, lng0) {
         flags[Math.floor(chain.length / 3)] = 1;
         flags[Math.floor((2 * chain.length) / 3)] = 1;
       }
-      let last = chain[0];
+      let last = chain[0], major = false;
       for (let k = 1; k < chain.length; k++) {
+        if (majorRaw.has(ekey(chain[k - 1], chain[k]))) major = true;
         if (!flags[k]) continue;
         keep[chain[k]] = 1;
-        addEdge(last, chain[k]);
+        addEdge(last, chain[k], major);
         last = chain[k];
+        major = false;
       }
     }
   }
@@ -213,11 +222,12 @@ function compact(json, lat0, lng0) {
     .map((b) => [round(b.lat, 5), round(b.lng, 5), b.home]);
 
   return {
-    v: 1,
+    v: 2,
     lat: lat0,
     lng: lng0,
     nodes,
-    edges: edges.map(([a, b]) => [newIndex.get(a), newIndex.get(b)]),
+    // [a, b] for streets and paths, [a, b, 1] for busy roads (the parent-safe route avoids them)
+    edges: edges.map(([a, b, m]) => (m ? [newIndex.get(a), newIndex.get(b), 1] : [newIndex.get(a), newIndex.get(b)])),
     buildings,
   };
 }

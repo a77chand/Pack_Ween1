@@ -22,6 +22,11 @@
     <h1 class="logo"><span class="logo-pac" aria-hidden="true"></span>PACK_WEEN</h1>
     <p class="tagline">Pac-Man on your real streets. Grab candy from volunteer houses, dodge the ghosts, and top your neighbourhood's leaderboard.</p>
 
+    <div id="raceBox" class="notice race" hidden>
+      <p>⚔️ <span id="raceText"></span></p>
+      <button id="raceGo" class="primary">Accept the race</button>
+    </div>
+
     <div id="resumeBox" class="notice" hidden>
       <p id="resumeText"></p>
       <div class="row">
@@ -52,6 +57,11 @@
       </button>
     </div>
 
+    <div id="walkOpts" class="walk-opts" hidden>
+      <label class="check"><input type="checkbox" id="parentShare"> 👪 Share my live location with a parent</label>
+      <label id="curfewRow" class="check" hidden>🏠 Home by <input type="time" id="curfewTime" value="20:30"></label>
+    </div>
+
     <div class="skins-wrap"><span class="small muted">Your Pac-Man</span><div id="skins" class="skins" role="group" aria-label="Pac-Man skin"></div></div>
 
     <button id="go" class="primary big">Start trick-or-treating</button>
@@ -79,7 +89,9 @@
         <li>👻 In Arcade, a ghost that catches you costs <b>+10 s</b>. In Walk mode they're harmless and just drift around for atmosphere. Most candy wins; time breaks ties.</li>
         <li>⭐ In Arcade, eat the dots on every street, chain candy for combos up to <b>x5</b>, and clear a neighbourhood to level up. You have 3 lives, and the ghosts get faster each level.</li>
         <li>⚡ Energy-drink houses boost your speed, 🎭 costume houses hide you from the ghosts, and 🕸️ haunted houses make them furious.</li>
-        <li>🧭 <b>Route</b> lays Pac-dots along the shortest walk through every house.</li>
+        <li>🧭 <b>Route</b> lays Pac-dots along the shortest walk through every house. In Walk mode it sticks to quiet streets and avoids busy roads.</li>
+        <li>🎥 3D camera, 📷 AR ghosts through your phone camera, and ⚔️ race links: share your result and friends race your exact run.</li>
+        <li>👪 Walking with kids? Tick "share my live location" for a private link a parent can follow, with curfew reminders.</li>
         <li><b>Walk · Ranked</b> uses your real GPS and gets its own leaderboard. The server checks your speed, so no cars or teleporting.</li>
       </ol>
     </details>
@@ -101,6 +113,8 @@
   <button id="muteBtn" aria-label="Sound on or off">🔊</button>
   <button id="legendBtn" aria-label="Show legend" aria-expanded="false">?</button>
   <button id="recenterBtn" aria-label="Follow Pac-Man" hidden>🎯</button>
+  <button id="tiltBtn" aria-label="3D camera" aria-pressed="false" title="3D camera" hidden>🎥</button>
+  <button id="arBtn" aria-label="AR view" title="AR: see the ghosts through your camera" hidden>📷</button>
 </div>
 
 <aside id="legend" hidden>

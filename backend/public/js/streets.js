@@ -42,8 +42,14 @@ export class StreetGraph {
       const [x, y] = proj.toXY(lat, lng);
       this.addNode(x, y);
     }
-    for (const [a, b] of data.edges) this.link(a, b);
+    this.major = new Set(); // busy-road segments, "a,b" with a < b
+    for (const [a, b, m] of data.edges) {
+      this.link(a, b);
+      if (m) this.major.add(a < b ? `${a},${b}` : `${b},${a}`);
+    }
   }
+
+  isMajor(a, b) { return this.major.has(a < b ? `${a},${b}` : `${b},${a}`); }
 
   get size() { return this.x.length; }
 
@@ -107,9 +113,11 @@ export class StreetGraph {
     if (t * l < 1.5) return a;
     if ((1 - t) * l < 1.5) return b;
     const n = this.addNode(this.x[a] + (this.x[b] - this.x[a]) * t, this.y[a] + (this.y[b] - this.y[a]) * t);
+    const major = this.isMajor(a, b);
     this.unlink(a, b);
     this.link(a, n);
     this.link(n, b);
+    if (major) { this.major.add(a < n ? `${a},${n}` : `${n},${a}`); this.major.add(b < n ? `${b},${n}` : `${n},${b}`); }
     return n;
   }
 
@@ -125,8 +133,9 @@ export class StreetGraph {
     return m;
   }
 
-  // Shortest street distances from one node to all others
-  dijkstra(src) {
+  // Shortest street distances from one node to all others. With safe, busy roads
+  // count as 4x longer, so routes keep to quiet streets unless there's no other way.
+  dijkstra(src, safe = false) {
     const n = this.size;
     const dist = new Float64Array(n).fill(Infinity);
     const prev = new Int32Array(n).fill(-1);
@@ -137,7 +146,7 @@ export class StreetGraph {
       const u = heap.pop();
       const du = dist[u];
       for (const v of this.adj[u]) {
-        const nd = du + this.len(u, v);
+        const nd = du + this.len(u, v) * (safe && this.isMajor(u, v) ? 4 : 1);
         if (nd < dist[v]) { dist[v] = nd; prev[v] = u; heap.push(nd, v); }
       }
     }

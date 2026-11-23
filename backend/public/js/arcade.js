@@ -22,10 +22,10 @@ export const savedSkin = () => skinById(store.get(SKIN_KEY));
 export const saveSkin = (id) => store.set(SKIN_KEY, id);
 
 export function pacHtml(skin) {
-  return `<div class="pac idle skin-${skin.id}" style="--pc:${skin.color}"><div class="pac-glow"></div><div class="body"></div><div class="eye"></div>` +
+  return `<div class="bb"><div class="pac idle skin-${skin.id}" style="--pc:${skin.color}"><div class="pac-glow"></div><div class="body"></div><div class="eye"></div>` +
     (skin.id === "pumpkin" ? '<div class="stem"></div>' : "") +
     (skin.hat ? '<div class="hat"></div>' : "") +
-    (skin.acc ? `<div class="acc">${skin.acc}</div>` : "") + "</div>";
+    (skin.acc ? `<div class="acc">${skin.acc}</div>` : "") + "</div></div>";
 }
 
 function hash(s) {

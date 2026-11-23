@@ -90,7 +90,8 @@ function realHousesNear(db, lat, lng, radius = NEAR_METERS) {
     SELECT h.id, h.name, h.lat, h.lng, h.full_size, h.owner_id,
       (SELECT COUNT(DISTINCT r.player_id) FROM run_houses rh JOIN runs r ON r.id = rh.run_id
         WHERE rh.house_id = h.id AND rh.visited_at IS NOT NULL AND r.flagged = 0) AS claims,
-      (SELECT COUNT(*) FROM house_reports hr WHERE hr.house_id = h.id) AS reports
+      (SELECT COUNT(*) FROM house_reports hr WHERE hr.house_id = h.id) AS reports,
+      (SELECT COUNT(*) FROM house_votes hv WHERE hv.house_id = h.id) AS votes
     FROM houses h
     WHERE h.hidden = 0 AND h.lat BETWEEN ? AND ? AND h.lng BETWEEN ? AND ?
   `).all(lat - dLat, lat + dLat, lng - dLng, lng + dLng);
@@ -112,12 +113,23 @@ function publicHouse(h, viewerId) {
     claims: h.claims,
     verified: h.claims >= VERIFY_CLAIMS,
     mine: viewerId != null && h.owner_id === viewerId,
+    votes: h.votes || 0,
+    spookiest: !!h.spookiest,
   };
+}
+
+// The most-voted house in a list gets the "spookiest" badge (it needs at least 2 votes)
+const MIN_SPOOKY_VOTES = 2;
+function markSpookiest(list) {
+  let top = null;
+  for (const h of list) if ((h.votes || 0) >= MIN_SPOOKY_VOTES && (!top || h.votes > top.votes)) top = h;
+  if (top) top.spookiest = true;
+  return list;
 }
 
 // The list of candy houses for a run starting at lat/lng
 function neighbourhood(db, lat, lng, streets, viewerId = null) {
-  const real = realHousesNear(db, lat, lng).map((h) => ({ ...publicHouse(h, viewerId), ref: h.id, demo: false }));
+  const real = markSpookiest(realHousesNear(db, lat, lng)).map((h) => ({ ...publicHouse(h, viewerId), ref: h.id, demo: false }));
   let list = real;
   if (real.length < MIN_REAL) {
     const demo = demoHouses(lat, lng, streets)
@@ -130,4 +142,4 @@ function neighbourhood(db, lat, lng, streets, viewerId = null) {
 
 const DEMO_NAMES = DEMO_SPOTS.map((s) => s[2]);
 
-module.exports = { neighbourhood, realHousesNear, publicHouse, demoHouses, anchorFor, VERIFY_CLAIMS, NEAR_METERS, MIN_REAL, DEMO_NAMES };
+module.exports = { markSpookiest, neighbourhood, realHousesNear, publicHouse, demoHouses, anchorFor, VERIFY_CLAIMS, NEAR_METERS, MIN_REAL, DEMO_NAMES };

@@ -9,7 +9,7 @@ const cors = require("cors");
 const { distanceMeters, round, isNum, isLat, isLng, toRad } = require("./geo");
 const { tx } = require("./db");
 const { checkMove, LIMITS } = require("./anticheat");
-const { neighbourhood, realHousesNear, publicHouse, VERIFY_CLAIMS, MIN_REAL, DEMO_NAMES } = require("./neighbourhood");
+const { markSpookiest, neighbourhood, realHousesNear, publicHouse, VERIFY_CLAIMS, MIN_REAL, DEMO_NAMES } = require("./neighbourhood");
 const { planRoute } = require("./route");
 const demoPlayers = require("./bots");
 
@@ -190,9 +190,13 @@ function createApp({
         demo: h.house_id == null,
         ref: h.house_id,
         visited: h.visited_at != null,
-        ...(real && { claims, verified: claims >= VERIFY_CLAIMS, mine: real.owner_id === run.player_id }),
+        ...(real && {
+          claims, verified: claims >= VERIFY_CLAIMS, mine: real.owner_id === run.player_id,
+          votes: db.prepare("SELECT COUNT(*) AS n FROM house_votes WHERE house_id = ?").get(real.id).n,
+        }),
       };
     });
+    markSpookiest(houses);
     return {
       runId: run.id,
       mode: run.mode,
@@ -317,7 +321,7 @@ function createApp({
     const radius = req.query.radius === undefined ? 500 : Number(req.query.radius);
     if (!Number.isFinite(radius) || radius < 0 || radius > 10000)
       return res.status(400).json({ error: "radius must be between 0 and 10000 meters" });
-    res.json(realHousesNear(db, pos.lat, pos.lng, radius).map((h) => ({ ...publicHouse(h, viewer?.id), distance: Math.round(h.distance) })));
+    res.json(markSpookiest(realHousesNear(db, pos.lat, pos.lng, radius)).map((h) => ({ ...publicHouse(h, viewer?.id), distance: Math.round(h.distance) })));
   });
 
   app.post("/houses", requireAuth, (req, res) => {
@@ -357,6 +361,17 @@ function createApp({
     const hidden = reports >= REPORTS_TO_HIDE && reports > claims;
     if (hidden) q.hideHouse.run(house.id);
     res.json({ reports, hidden });
+  });
+
+  // "Spooky!" vote for a house's decorations. Only players who collected its candy can vote.
+  app.post("/houses/:id/vote", requireAuth, (req, res) => {
+    const house = q.house.get(Number(req.params.id));
+    if (!house || house.hidden) return res.status(404).json({ error: "house not found" });
+    const visited = db.prepare(`SELECT 1 FROM run_houses rh JOIN runs r ON r.id = rh.run_id
+      WHERE rh.house_id = ? AND r.player_id = ? AND rh.visited_at IS NOT NULL LIMIT 1`).get(house.id, req.player.id);
+    if (!visited) return res.status(400).json({ error: "collect this house's candy before voting" });
+    db.prepare("INSERT OR IGNORE INTO house_votes (house_id, player_id, created_at) VALUES (?, ?, ?)").run(house.id, req.player.id, now());
+    res.json({ votes: db.prepare("SELECT COUNT(*) AS n FROM house_votes WHERE house_id = ?").get(house.id).n });
   });
 
   // ---------- Runs ----------
@@ -452,6 +467,11 @@ function createApp({
     if (run.end_time) return res.status(400).json({ error: "run already finished" });
     run.end_time = now();
     q.finishRun.run(run.end_time, run.id);
+    // the path, so friends can race this run later ([[seconds, lat, lng], ...])
+    const trail = req.body?.trail;
+    if (Array.isArray(trail) && trail.length <= 2500 && !run.flagged &&
+        trail.every((p) => Array.isArray(p) && p.length === 3 && isNum(p[0]) && isLat(p[1]) && isLng(p[2])))
+      db.prepare("UPDATE runs SET trail = ? WHERE id = ?").run(JSON.stringify(trail), run.id);
     const houses = q.visitedCount.get(run.id).n;
     res.json({
       houses,
@@ -466,6 +486,44 @@ function createApp({
       mode: run.mode,
       flagged: !!run.flagged,
       strikes: run.strikes,
+    });
+  });
+
+  // ---------- Race me ----------
+  // A finished run anyone can race: where it started, its score and its path
+  app.get("/runs/:id/race", (req, res) => {
+    const run = q.run.get(Number(req.params.id));
+    if (!run || !run.end_time || run.flagged || !run.trail) return res.status(404).json({ error: "that race isn't available" });
+    const name = db.prepare("SELECT name FROM players WHERE id = ?").get(run.player_id).name;
+    res.json({
+      runId: run.id, player: name, mode: run.mode,
+      houses: q.visitedCount.get(run.id).n, total: q.totalCount.get(run.id).n, seconds: rankedSeconds(run),
+      start: { lat: run.start_lat, lng: run.start_lng }, trail: JSON.parse(run.trail),
+    });
+  });
+
+  // ---------- Parent safety: live-location link ----------
+  // The player makes a private link a parent can open to follow them live
+  app.post("/runs/:id/share", requireAuth, (req, res) => {
+    const run = ownRun(req, res);
+    if (!run) return;
+    const curfew = req.body?.curfew;
+    if (curfew != null && (!isNum(curfew) || curfew < now() || curfew > now() + 12 * 60 * 60 * 1000))
+      return res.status(400).json({ error: "curfew must be within the next 12 hours" });
+    const token = run.share_token || crypto.randomBytes(16).toString("hex");
+    db.prepare("UPDATE runs SET share_token = ?, curfew = ? WHERE id = ?").run(token, curfew ?? run.curfew ?? null, run.id);
+    res.json({ token, curfew: curfew ?? run.curfew ?? null });
+  });
+
+  app.get("/watch/:token", (req, res) => {
+    if (!/^[a-f0-9]{32}$/.test(req.params.token)) return res.status(404).json({ error: "link not found" });
+    const run = db.prepare("SELECT * FROM runs WHERE share_token = ?").get(req.params.token);
+    if (!run) return res.status(404).json({ error: "link not found" });
+    const name = db.prepare("SELECT name FROM players WHERE id = ?").get(run.player_id).name;
+    res.json({
+      player: name, mode: run.mode, ended: run.end_time != null, startTime: run.start_time, curfew: run.curfew,
+      position: run.last_lat != null ? { lat: run.last_lat, lng: run.last_lng, time: run.last_time } : null,
+      houses: q.visitedCount.get(run.id).n, total: q.totalCount.get(run.id).n, meters: Math.round(run.distance),
     });
   });
 

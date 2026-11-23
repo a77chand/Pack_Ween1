@@ -80,6 +80,14 @@ CREATE TABLE IF NOT EXISTS run_houses (
 );
 CREATE INDEX IF NOT EXISTS run_houses_house ON run_houses (house_id);
 
+-- "Spooky!" votes for a volunteer house's decorations (only from players who visited it)
+CREATE TABLE IF NOT EXISTS house_votes (
+  house_id   INTEGER NOT NULL REFERENCES houses(id) ON DELETE CASCADE,
+  player_id  INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (house_id, player_id)
+);
+
 CREATE TABLE IF NOT EXISTS messages (
   id        INTEGER PRIMARY KEY,
   player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
@@ -103,6 +111,9 @@ CREATE TABLE IF NOT EXISTS osm_cache (
 const ADDED_COLUMNS = [
   ["runs", "session_hash", "TEXT"],
   ["messages", "bot", "INTEGER NOT NULL DEFAULT 0"],
+  ["runs", "trail", "TEXT"],           // [[seconds, lat, lng], ...] for race-me replays
+  ["runs", "share_token", "TEXT"],     // a parent's live-location link
+  ["runs", "curfew", "INTEGER"],       // when the kid should be home (ms since epoch)
 ];
 
 function openDb(file) {

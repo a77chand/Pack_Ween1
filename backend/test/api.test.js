@@ -394,3 +394,45 @@ test("live: players mid-run see each other, but not themselves", async () => {
   tick(60);
   assert.ok(!(await onBots("GET", `/live?${at}`, { token: a })).body.some((p) => p.player === "LiveB"), "gone after 30 s without a ping");
 });
+
+test("race me: a finished run's path can be raced by anyone", async () => {
+  const t = (await onBots("POST", "/players", { body: { name: "Racer", pin: "1234" } })).body.token;
+  const run = (await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: t })).body;
+  assert.equal((await onBots("GET", `/runs/${run.runId}/race`)).status, 404, "not until it's finished");
+  const trail = [[0, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], [1.5, DEFAULT_CENTER.lat + 0.0002, DEFAULT_CENTER.lng]];
+  await onBots("POST", `/runs/${run.runId}/finish`, { body: { trail }, token: t });
+  const race = (await onBots("GET", `/runs/${run.runId}/race`)).body;
+  assert.equal(race.player, "Racer");
+  assert.deepEqual(race.trail, trail);
+});
+
+test("parent link: follow a walk live, with a curfew", async () => {
+  const t = (await onBots("POST", "/players", { body: { name: "Kiddo", pin: "1234" } })).body.token;
+  const run = (await onBots("POST", "/runs/start", { body: { mode: "gps", ...DEFAULT_CENTER }, token: t })).body;
+  assert.equal((await onBots("POST", `/runs/${run.runId}/share`, { body: { curfew: clock - 1 }, token: t })).status, 400);
+  const share = (await onBots("POST", `/runs/${run.runId}/share`, { body: { curfew: clock + 3600e3 }, token: t })).body;
+  const w = (await onBots("GET", `/watch/${share.token}`)).body;
+  assert.equal(w.player, "Kiddo");
+  assert.equal(w.curfew, clock + 3600e3);
+  assert.ok(w.position && w.ended === false);
+  assert.equal((await onBots("GET", "/watch/" + "0".repeat(32))).status, 404);
+});
+
+test("spookiest house: only visitors vote, and the top house gets the badge", async () => {
+  const host = (await onBots("POST", "/players", { body: { name: "SpookyHost", pin: "1234" } })).body.token;
+  const spot = offset(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, 4000, 4000);
+  const house = (await onBots("POST", "/houses", { body: { name: "Crypt Keeper", ...spot }, token: host })).body;
+  const stranger = (await onBots("POST", "/players", { body: { name: "Stranger", pin: "1234" } })).body.token;
+  assert.equal((await onBots("POST", `/houses/${house.id}/vote`, { body: {}, token: stranger })).status, 400);
+  for (const name of ["VoterA", "VoterB"]) {
+    const t = (await onBots("POST", "/players", { body: { name, pin: "1234" } })).body.token;
+    const run = (await onBots("POST", "/runs/start", { body: { mode: "gps", ...spot }, token: t })).body;
+    const h = run.houses.find((x) => x.ref === house.id);
+    tick(3);
+    await onBots("POST", `/runs/${run.runId}/visit`, { body: { houseId: h.id, ...spot }, token: t });
+    assert.equal((await onBots("POST", `/houses/${house.id}/vote`, { body: {}, token: t })).status, 200);
+  }
+  const list = (await onBots("GET", `/houses?lat=${spot.lat}&lng=${spot.lng}&radius=50`)).body;
+  assert.equal(list[0].votes, 2);
+  assert.equal(list[0].spookiest, true);
+});

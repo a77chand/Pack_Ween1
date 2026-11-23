@@ -23,7 +23,7 @@ const KINDS = [
 const PHASES = { arcade: [6, 20, 6, 20, 4], gps: [20, 60, 20] };
 
 const svg = (color) => `
-<div class="ghost-sprite" style="--c:${color}">
+<div class="bb"><div class="ghost-sprite" style="--c:${color}">
   <svg viewBox="0 0 28 30" aria-hidden="true">
     <path class="body" d="M2 28V13a12 12 0 0 1 24 0v15l-4-3-4 3-4-3-4 3-4-3z"/>
     <g class="eyes">
@@ -35,7 +35,8 @@ const svg = (color) => `
     <path class="scared-face" d="M7 21l2.5-2 2.5 2 2-2 2 2 2.5-2 2.5 2"/>
     <g class="scared-eyes"><rect x="8" y="10" width="3" height="3"/><rect x="17" y="10" width="3" height="3"/></g>
   </svg>
-</div>`;
+</div></div>
+`;
 
 export class Ghosts {
   // opts: { graph, toLatLng, layer, home:[x,y], corners:[[x,y]x4], mode, count, speeds, catchRadius, harmless, onCatch, onEat }
@@ -220,7 +221,7 @@ export class Ghosts {
     g.marker.setLatLng(this.toLatLng(g.x, g.y));
     const el = g.marker.getElement();
     if (!el) return;
-    const sprite = el.firstElementChild;
+    const sprite = el.querySelector(".ghost-sprite");
     const flash = g.state === "fright" && this.frightLeft < Math.min(2.5, this.frightLength * 0.3);
     const cls = `ghost-sprite ${g.state}${flash ? " flash" : ""}`;
     if (sprite.className !== cls) sprite.className = cls;

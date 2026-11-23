@@ -302,3 +302,38 @@ body:not(.playing) #toasts { top: auto; bottom: calc(20px + var(--safe-b)); }
 .replay-pac span { position: absolute; top: 33px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--text); background: rgba(13, 6, 18, .7); border-radius: 6px; padding: 1px 5px; white-space: nowrap; }
 .rival.live .rival-name { color: var(--green); }
 .house.perk .c { filter: drop-shadow(0 0 7px var(--gold)); }
+
+/* ===== 3D camera: tilt the map, stand the sprites up ===== */
+.bb { transform-origin: 50% 85%; transition: transform .4s; }
+body.tilt #map { inset: -28% -30% -8% -30%; transform: perspective(1200px) rotateX(42deg); transform-origin: 50% 70%; transition: transform .5s; }
+body.tilt .leaflet-map-pane, body.tilt .leaflet-pane, body.tilt .leaflet-marker-icon, body.tilt .leaflet-marker-icon > div { transform-style: preserve-3d; }
+body.tilt .bb { transform: rotateX(-42deg) scale(1.25); }
+body.tilt #vignette { background: linear-gradient(180deg, rgba(13, 6, 18, .95) 0%, rgba(13, 6, 18, .2) 30%, transparent 50%), radial-gradient(ellipse at center, transparent 55%, rgba(30, 5, 45, .6) 100%); }
+#tiltBtn[aria-pressed="true"] { border-color: var(--orange); box-shadow: 0 0 10px var(--orange); }
+
+/* ===== AR ===== */
+.ar { position: fixed; inset: 0; z-index: 3000; background: radial-gradient(ellipse at center, #1f0d2e, #05010a); overflow: hidden; }
+.ar video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ar::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 50%, rgba(20, 0, 30, .55)); }
+.ar-layer { position: absolute; inset: 0; z-index: 1; }
+.ar-thing { position: absolute; display: flex; flex-direction: column; align-items: center; }
+.ar-thing svg { width: 100%; }
+.ar-thing b { line-height: 1; filter: drop-shadow(0 0 14px var(--orange)); }
+.ar-thing span { margin-top: 4px; font-size: 12px; font-weight: 700; color: #fff; background: rgba(13, 6, 18, .7); border-radius: 8px; padding: 2px 8px; white-space: nowrap; }
+.ar-hud { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ar-note { font-size: 13px; color: var(--gold); background: rgba(13, 6, 18, .7); border-radius: 10px; padding: 4px 10px; }
+.ar-note:empty { visibility: hidden; }
+.ar-close { width: 44px; height: 44px; border-radius: 50%; padding: 0; font-size: 18px; }
+.ar-radar { position: absolute; z-index: 2; right: 14px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 100px; height: 100px; border-radius: 50%; border: 2px solid var(--purple); background: rgba(13, 6, 18, .7); }
+.ar-radar i { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--orange); }
+.ar-radar i.me { left: 50px; top: 50px; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+
+/* ===== Walk options, race, badges ===== */
+.walk-opts { display: flex; flex-direction: column; gap: 6px; font-size: 13px; background: #160a22; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.check { display: flex; align-items: center; gap: 8px; }
+.check input[type="checkbox"] { width: auto; }
+.check input[type="time"] { width: auto; padding: 4px 8px; }
+.notice.race { border-color: #ff3b5c; background: rgba(255, 59, 92, .12); }
+.replay-pac.race { opacity: .8; }
+.replay-pac.race span { color: #ff8a9a; }
+.spooky-badge { position: absolute; left: 10px; top: -16px; font-size: 13px; filter: drop-shadow(0 0 6px var(--gold)); }

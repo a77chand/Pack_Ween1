@@ -33,7 +33,7 @@ function orderStops(D) {
 }
 
 // start: [x, y]; stops: [{ x, y, node }]. Returns { order, path: [[x,y]...], meters }
-export function planRoute(graph, start, startNode, stops) {
+export function planRoute(graph, start, startNode, stops, safe = false) {
   if (!stops.length) return { order: [], path: [], meters: 0 };
   if (!graph) {
     const pts = [start, ...stops.map((s) => [s.x, s.y])];
@@ -43,7 +43,7 @@ export function planRoute(graph, start, startNode, stops) {
     return { order, path, meters: sumPath(path) };
   }
   const nodes = [startNode, ...stops.map((s) => s.node)];
-  const runs = nodes.map((n) => graph.dijkstra(n));
+  const runs = nodes.map((n) => graph.dijkstra(n, safe));
   const D = nodes.map((_, i) => nodes.map((m) => runs[i].dist[m]));
   const order = orderStops(D);
   const path = [start];
