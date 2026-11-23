@@ -36,6 +36,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   const token = location.hash.slice(1);
+  const API = ["localhost", "127.0.0.1"].includes(location.hostname) || location.hostname.endsWith("onrender.com") ? "" : "https://pack-ween.onrender.com";
   const $ = (id) => document.getElementById(id);
   const map = L.map("map", { zoomControl: false }).setView([43.4723, -80.5449], 16);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
@@ -51,7 +52,7 @@
     if (!/^[a-f0-9]{32}$/.test(token)) { $("who").textContent = "Link not valid"; $("status").textContent = "Ask for a new link."; return; }
     let w;
     try {
-      const r = await fetch(`/watch/${token}`);
+      const r = await fetch(`${API}/watch/${token}`);
       if (!r.ok) { $("who").textContent = "Link not found"; $("status").textContent = "This walk may have been on an old server."; return; }
       w = await r.json();
     } catch { $("status").textContent = "Offline, retrying…"; return; }

@@ -4,6 +4,10 @@
 const SAME_ORIGIN = ["localhost", "127.0.0.1"].includes(location.hostname) || location.hostname.endsWith("onrender.com");
 const BASE = SAME_ORIGIN ? "" : "https://pack-ween.onrender.com";
 
+// On GitHub Pages the page loads instantly but the free API server may be asleep:
+// poke it straight away so it's waking while the start screen draws.
+if (BASE) fetch(`${BASE}/health`).catch(() => {});
+
 const TOKEN_KEY = "packween.token";
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },

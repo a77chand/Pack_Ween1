@@ -1283,7 +1283,8 @@ async function share() {
   const head = r.daily ? `🎃 Pack_Ween Daily ${r.daily.key} (${r.daily.twist})` : `🎃 Pack_Ween · level ${r.level}`;
   const candy = "🟧".repeat(r.houses) + "⬛".repeat(Math.max(0, r.total - r.houses));
   const text = `${head}\n⭐ ${r.score.toLocaleString()} · ${r.houses}/${r.total} 🍬 · ⏱ ${fmtTime(r.seconds)}${r.ghosts ? ` · 👻×${r.ghosts}` : ""}\n${candy}\n${r.raceToken ? "⚔️ Race my exact run:" : "Can you beat me?"}`;
-  const url = r.raceToken ? `${location.origin}/?race=${r.raceToken}` : location.origin + location.pathname;
+  const home = new URL(".", location.href).href; // works on Render and on GitHub Pages (/Pack_Ween1/)
+  const url = r.raceToken ? `${home}?race=${r.raceToken}` : home;
   // Share a picture of the result when the device can, otherwise download it and copy the text
   const blob = await resultCard(r, { player: S.profile?.name || "Me", skinColor: savedSkin().color }).catch(() => null);
   const file = blob && new File([blob], "pack-ween-result.png", { type: "image/png" });
@@ -1459,7 +1460,7 @@ function openAr() {
 async function shareWithParent() {
   try {
     const r = await api(`/runs/${S.run.runId}/share`, { body: S.curfew ? { curfew: S.curfew } : {} });
-    const url = `${location.origin}/watch.html#${r.token}`;
+    const url = `${new URL("watch.html", location.href).href}#${r.token}`;
     let close = null;
     const copy = el("button", { class: "primary", onclick: async () => {
       try {
@@ -1646,7 +1647,7 @@ loadRaceInvite();
     try { await loadNeighbourhood(pos); } catch { /* keep the default neighbourhood */ }
   } else if (!S.center) {
     // the server was asleep: keep trying until it answers
-    for (let i = 0; i < 10 && !S.center; i++) {
+    for (let i = 0; i < 30 && !S.center; i++) { // a cold free-tier start can take up to a minute
       await sleep(3000);
       await loadNeighbourhood(null).catch(() => {});
     }
