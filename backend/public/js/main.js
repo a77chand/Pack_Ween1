@@ -834,6 +834,7 @@ function frame(t) {
     eatStreetDots();
     updateNext();
     updatePower();
+    updateGameHud();
     pacEl?.classList.toggle("ghosted", hidden);
     pacEl?.classList.toggle("boosted", S.clock < S.boostUntil);
   }
@@ -1123,7 +1124,8 @@ function stopPlaying() {
   for (const id of ["hud", "tools", "bar", "pad", "legend", "banner"]) $(id).hidden = true;
   setTilt(false);
   ar?.close();
-  if (tutorial?.el) tutorial.el.hidden = true;
+  tutorial?.el?.remove(); // unfinished: it starts again next Arcade game
+  tutorial = null;
   $("banner").className = "";
   document.body.classList.remove("playing", "powered");
 }
@@ -1135,6 +1137,7 @@ async function finishRun({ levelClear = false, gameOver = false } = {}) {
     const trail = S.trail.slice(-2500);
     const r = await api(`/runs/${S.run.runId}/finish`, { body: S.run.mode === "arcade" ? { trail } : {} });
     r.runId = S.run.runId;
+    r.raceToken = r.raceToken || null;
     stopPlaying();
     if (levelClear && !r.flagged) {
       if (saveReplay(areaKey(), r.seconds, trail)) toast("👻 New best time here! Your replay will race you next time.", "good", 3500);
@@ -1195,7 +1198,7 @@ function showResults(r) {
   r.daily = g.daily ? { key: g.dayKey, twist: g.twist.label } : null;
   const bestKey = g.daily ? `daily.${g.dayKey}` : r.mode;
   r.newBest = saveBest(bestKey, g.score);
-  if (S.race && S.race.runId !== r.runId) {
+  if (S.race) {
     const won = r.houses > S.race.houses || (r.houses === S.race.houses && r.seconds < S.race.seconds);
     toast(won ? `⚔️ You beat ${S.race.player}!` : `⚔️ ${S.race.player} wins this one. Rematch?`, won ? "good" : "warn", 5000);
   }
@@ -1269,8 +1272,8 @@ async function share() {
   if (!r) return;
   const head = r.daily ? `🎃 Pack_Ween Daily ${r.daily.key} (${r.daily.twist})` : `🎃 Pack_Ween · level ${r.level}`;
   const candy = "🟧".repeat(r.houses) + "⬛".repeat(Math.max(0, r.total - r.houses));
-  const text = `${head}\n⭐ ${r.score.toLocaleString()} · ${r.houses}/${r.total} 🍬 · ⏱ ${fmtTime(r.seconds)}${r.ghosts ? ` · 👻×${r.ghosts}` : ""}\n${candy}\n${r.mode === "arcade" ? "⚔️ Race my exact run:" : "Can you beat me?"}`;
-  const url = r.mode === "arcade" && !r.flagged && r.runId ? `${location.origin}/?race=${r.runId}` : location.origin + location.pathname;
+  const text = `${head}\n⭐ ${r.score.toLocaleString()} · ${r.houses}/${r.total} 🍬 · ⏱ ${fmtTime(r.seconds)}${r.ghosts ? ` · 👻×${r.ghosts}` : ""}\n${candy}\n${r.raceToken ? "⚔️ Race my exact run:" : "Can you beat me?"}`;
+  const url = r.raceToken ? `${location.origin}/?race=${r.raceToken}` : location.origin + location.pathname;
   // Share a picture of the result when the device can, otherwise download it and copy the text
   const blob = await resultCard(r, { player: S.profile?.name || "Me", skinColor: savedSkin().color }).catch(() => null);
   const file = blob && new File([blob], "pack-ween-result.png", { type: "image/png" });
@@ -1475,9 +1478,9 @@ const escapeText = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", 
 
 async function loadRaceInvite() {
   const id = new URLSearchParams(location.search).get("race");
-  if (!/^\d+$/.test(id || "")) return;
+  if (!/^[a-f0-9]{24}$/.test(id || "")) return;
   try {
-    const race = await api(`/runs/${id}/race`);
+    const race = await api(`/race/${id}`);
     S.raceInvite = race;
     $("raceText").textContent = `${race.player} challenged you: ${race.houses} 🍬 in ${fmtTime(race.seconds)}. Race their exact run!`;
     $("raceBox").hidden = false;

@@ -28,7 +28,7 @@ Play it two ways:
 - 🎨 **Unlockable skins.** Pumpkin, Witch, Vampire, Skeleton and Golden Pac-Men unlock with lifetime candy.
 - 📅 **Daily challenge.** Everyone plays the same neighbourhood with the day's twist (speedy ghosts, one life, pitch dark, double dots or a ghost swarm). It ends with a shareable emoji result card.
 - 👻 **Best-run replay.** Your fastest clear of an area comes back as a see-through Pac-Man to race against.
-- 🟢 **Live multiplayer.** Real players mid-run nearby show up on your map in real time.
+- 🟢 **Live multiplayer.** Real players out walking nearby show up on your map in real time. At-home Arcade players are never shown, so nobody's home is given away.
 - 🌕 **Witching hour.** Every point counts double from 9 to 10 pm.
 
 **More ways to play:**
@@ -132,8 +132,8 @@ The backend serves the game and a JSON API. Full request and response examples a
 | GET | `/route?lat=&lng=&runId=` | Suggested walking order through the remaining houses |
 | GET / POST | `/chat` | Read and post neighbourhood chat (demo players reply) |
 | GET | `/activity?lat=&lng=` | Who's playing near you and what just happened |
-| GET | `/live?lat=&lng=` | Real players mid-run nearby and their latest positions |
-| GET | `/runs/:id/race` | A finished Arcade run's path, for race-me links |
+| GET | `/live?lat=&lng=` | Real Walk-mode players nearby and their latest positions (at-home Arcade players stay private) |
+| GET | `/race/:token` | A finished Arcade run's path, for race-me links (unguessable token) |
 | POST | `/runs/:id/share` | Make a private live-location link (optional `curfew`) |
 | GET | `/watch/:token` | What the parent page shows: position, candy, curfew |
 | POST | `/houses/:id/vote` | "Spookiest decorations" vote (only after collecting its candy) |

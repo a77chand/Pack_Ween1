@@ -111,7 +111,8 @@ CREATE TABLE IF NOT EXISTS osm_cache (
 const ADDED_COLUMNS = [
   ["runs", "session_hash", "TEXT"],
   ["messages", "bot", "INTEGER NOT NULL DEFAULT 0"],
-  ["runs", "trail", "TEXT"],           // [[seconds, lat, lng], ...] for race-me replays
+  ["runs", "trail", "TEXT"],
+  ["runs", "race_token", "TEXT"],      // unguessable id for race-me links (run ids are sequential)           // [[seconds, lat, lng], ...] for race-me replays
   ["runs", "share_token", "TEXT"],     // a parent's live-location link
   ["runs", "curfew", "INTEGER"],       // when the kid should be home (ms since epoch)
 ];

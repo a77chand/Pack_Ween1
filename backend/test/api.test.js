@@ -386,11 +386,14 @@ test("activity: who's playing and a feed of what just happened", async () => {
 test("live: players mid-run see each other, but not themselves", async () => {
   const a = (await onBots("POST", "/players", { body: { name: "LiveA", pin: "1234" } })).body.token;
   const b = (await onBots("POST", "/players", { body: { name: "LiveB", pin: "1234" } })).body.token;
-  await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: a });
-  await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: b });
+  await onBots("POST", "/runs/start", { body: { mode: "gps", ...DEFAULT_CENTER }, token: a });
+  await onBots("POST", "/runs/start", { body: { mode: "gps", ...DEFAULT_CENTER }, token: b });
+  const c = (await onBots("POST", "/players", { body: { name: "LiveHome", pin: "1234" } })).body.token;
+  await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: c });
   const at = `lat=${DEFAULT_CENTER.lat}&lng=${DEFAULT_CENTER.lng}`;
   const seenByA = (await onBots("GET", `/live?${at}`, { token: a })).body.map((p) => p.player);
   assert.ok(seenByA.includes("LiveB") && !seenByA.includes("LiveA"));
+  assert.ok(!seenByA.includes("LiveHome"), "at-home arcade players are never shown");
   tick(60);
   assert.ok(!(await onBots("GET", `/live?${at}`, { token: a })).body.some((p) => p.player === "LiveB"), "gone after 30 s without a ping");
 });
@@ -398,10 +401,11 @@ test("live: players mid-run see each other, but not themselves", async () => {
 test("race me: a finished run's path can be raced by anyone", async () => {
   const t = (await onBots("POST", "/players", { body: { name: "Racer", pin: "1234" } })).body.token;
   const run = (await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: t })).body;
-  assert.equal((await onBots("GET", `/runs/${run.runId}/race`)).status, 404, "not until it's finished");
   const trail = [[0, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], [1.5, DEFAULT_CENTER.lat + 0.0002, DEFAULT_CENTER.lng]];
-  await onBots("POST", `/runs/${run.runId}/finish`, { body: { trail }, token: t });
-  const race = (await onBots("GET", `/runs/${run.runId}/race`)).body;
+  const fin = (await onBots("POST", `/runs/${run.runId}/finish`, { body: { trail }, token: t })).body;
+  assert.match(fin.raceToken, /^[a-f0-9]{24}$/);
+  assert.equal((await onBots("GET", `/runs/${run.runId}/race`)).status, 404, "no guessable run-id route");
+  const race = (await onBots("GET", `/race/${fin.raceToken}`)).body;
   assert.equal(race.player, "Racer");
   assert.deepEqual(race.trail, trail);
 });

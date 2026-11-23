@@ -18,6 +18,7 @@ export class Tutorial {
   constructor() {
     this.step = -1;
     this.el = null;
+    this.seen = new Set(); // things already done before their step came up
   }
 
   static needed() { return store.get(TUTORIAL_KEY) !== "1"; }
@@ -40,12 +41,14 @@ export class Tutorial {
     this.el.classList.remove("pop");
     void this.el.offsetWidth;
     this.el.classList.add("pop");
+    if (this.seen.has(STEPS[i].id)) return setTimeout(() => this.event(STEPS[i].id), 1500);
     if (STEPS[i].id === "ghosts") setTimeout(() => this.event("ghosts"), 6000);
     if (STEPS[i].id === "done") setTimeout(() => this.finish(), 5000);
   }
 
   // The game reports what happened; matching events move the tutorial on
   event(id) {
+    this.seen.add(id);
     if (this.el && STEPS[this.step]?.id === id) this.go(this.step + 1);
   }
 

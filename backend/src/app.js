@@ -469,9 +469,12 @@ function createApp({
     q.finishRun.run(run.end_time, run.id);
     // the path, so friends can race this run later ([[seconds, lat, lng], ...])
     const trail = req.body?.trail;
+    let raceToken = null;
     if (Array.isArray(trail) && trail.length <= 2500 && !run.flagged &&
-        trail.every((p) => Array.isArray(p) && p.length === 3 && isNum(p[0]) && isLat(p[1]) && isLng(p[2])))
-      db.prepare("UPDATE runs SET trail = ? WHERE id = ?").run(JSON.stringify(trail), run.id);
+        trail.every((p) => Array.isArray(p) && p.length === 3 && isNum(p[0]) && isLat(p[1]) && isLng(p[2]))) {
+      raceToken = crypto.randomBytes(12).toString("hex");
+      db.prepare("UPDATE runs SET trail = ?, race_token = ? WHERE id = ?").run(JSON.stringify(trail), raceToken, run.id);
+    }
     const houses = q.visitedCount.get(run.id).n;
     res.json({
       houses,
@@ -486,13 +489,16 @@ function createApp({
       mode: run.mode,
       flagged: !!run.flagged,
       strikes: run.strikes,
+      raceToken,
     });
   });
 
   // ---------- Race me ----------
-  // A finished run anyone can race: where it started, its score and its path
-  app.get("/runs/:id/race", (req, res) => {
-    const run = q.run.get(Number(req.params.id));
+  // A finished run anyone with the link can race: where it started, its score and its path.
+  // Arcade runs start at the player's real location, so links use an unguessable
+  // token rather than the sequential run id.
+  app.get("/race/:token", (req, res) => {
+    const run = /^[a-f0-9]{24}$/.test(req.params.token) ? db.prepare("SELECT * FROM runs WHERE race_token = ?").get(req.params.token) : null;
     if (!run || !run.end_time || run.flagged || !run.trail) return res.status(404).json({ error: "that race isn't available" });
     const name = db.prepare("SELECT name FROM players WHERE id = ?").get(run.player_id).name;
     res.json({
@@ -638,8 +644,10 @@ function createApp({
   });
 
   // ---------- Live multiplayer ----------
-  // Real players mid-run near a point and where they were a moment ago (from their
-  // pings), so everyone sees each other's Pac-Man on the map. Your own run is left out.
+  // Real players walking (Walk mode) near a point and where they were a moment ago,
+  // so everyone sees each other's Pac-Man on the map. Arcade players are left out:
+  // they play from home, and their position would give their home away.
+  // Your own run is left out too.
   app.get("/live", (req, res) => {
     const pos = readLatLng(req.query);
     if (!pos) return res.status(400).json({ error: "lat and lng are required" });
@@ -650,7 +658,7 @@ function createApp({
       SELECT r.id, r.mode, r.last_lat, r.last_lng, r.session_hash, p.name,
         (SELECT COUNT(*) FROM run_houses WHERE run_id = r.id AND visited_at IS NOT NULL) AS houses
       FROM runs r JOIN players p ON p.id = r.player_id
-      WHERE r.end_time IS NULL AND r.last_time > ? AND r.flagged = 0
+      WHERE r.end_time IS NULL AND r.last_time > ? AND r.flagged = 0 AND r.mode = 'gps'
         AND r.last_lat BETWEEN ? AND ? AND r.last_lng BETWEEN ? AND ?`)
       .all(now() - 30 * 1000, pos.lat - dLat, pos.lat + dLat, pos.lng - dLng, pos.lng + dLng);
     res.json(rows
