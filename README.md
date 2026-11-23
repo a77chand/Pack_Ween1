@@ -36,6 +36,8 @@ Play it two ways:
 - 📷 **AR ghosts.** Point your phone camera down the street to see ghosts and candy houses floating where they really are, using the compass, with a radar.
 - ⚔️ **Race-me links.** Share an Arcade result and friends race a red replay of your exact run, and see who won.
 - 👪 **Parent safety mode (Walk).** A private live-location link a parent can follow on a map, curfew reminders, and a route that avoids busy roads (OpenStreetMap road classes).
+- 🎓 **First-run tutorial.** A coach walks new players through moving, dots, candy and ghosts, moving on as they actually do each step.
+- 🖼️ **Result pictures.** Share opens your phone's share sheet with a 1080×1350 result card (score, candy, time, ghosts and a race-me line). On desktop it downloads the picture and copies the text.
 - 🏆 **Spookiest house.** Players who collected a house's candy can vote for its decorations, and the top-voted house on the street gets a trophy.
 
 **Under the hood:**

@@ -11,6 +11,7 @@ import { Ghosts } from "./ghosts.js";
 import { Rivals } from "./rivals.js";
 import { FxLayer } from "./fx.js";
 import { ArView } from "./ar.js";
+import { Tutorial, resultCard } from "./extras.js";
 import {
   POINTS, COMBO_WINDOW, START_LIVES, SKINS, PERKS, perkFor, savedSkin, saveSkin, pacHtml,
   isWitchingHour, todayKey, dailyTwist, bestScore, saveBest, loadReplay, saveReplay,
@@ -415,6 +416,7 @@ class Pac {
 
   setWant(dir) {
     this.want = DIRS[dir];
+    tutorial?.event("move");
     const w = this.walker;
     if (w && w.moving && this.want[0] * w.hx + this.want[1] * w.hy < -0.7) w.reverse(); // instant U-turn
   }
@@ -644,6 +646,7 @@ async function claim(h) {
     const pts = POINTS.candy * g.combo;
     addScore(pts);
     floatText(map, [h.lat, h.lng], g.combo > 1 ? `+${pts * scoreMult()} x${g.combo}!` : `+${pts * scoreMult()}`);
+    tutorial?.event("candy");
     if (r.power) powerUp();
     if (h.perk && S.run.mode === "arcade") usePerk(h.perk);
     if (r.remaining === 0) {
@@ -860,6 +863,7 @@ function eatStreetDots() {
   const n = fx.eat(S.pac.x, S.pac.y);
   if (!n) return;
   addScore(n * POINTS.dot * (S.game.twist?.dotMult ?? 1));
+  tutorial?.event("dot");
   if (S.clock - lastDotSound > 0.12) { sfx.waka(); lastDotSound = S.clock; }
 }
 
@@ -1091,7 +1095,12 @@ function beginRun(run, x, y) {
   S.playing = true;
   refreshRivals();
   updateStatus();
+  if (run.mode === "arcade" && Tutorial.needed() && !tutorial) {
+    tutorial = new Tutorial();
+    setTimeout(() => tutorial?.start(), 1200);
+  }
 }
+let tutorial = null;
 
 function stopPlaying() {
   S.playing = false;
@@ -1114,6 +1123,7 @@ function stopPlaying() {
   for (const id of ["hud", "tools", "bar", "pad", "legend", "banner"]) $(id).hidden = true;
   setTilt(false);
   ar?.close();
+  if (tutorial?.el) tutorial.el.hidden = true;
   $("banner").className = "";
   document.body.classList.remove("playing", "powered");
 }
@@ -1261,9 +1271,22 @@ async function share() {
   const candy = "🟧".repeat(r.houses) + "⬛".repeat(Math.max(0, r.total - r.houses));
   const text = `${head}\n⭐ ${r.score.toLocaleString()} · ${r.houses}/${r.total} 🍬 · ⏱ ${fmtTime(r.seconds)}${r.ghosts ? ` · 👻×${r.ghosts}` : ""}\n${candy}\n${r.mode === "arcade" ? "⚔️ Race my exact run:" : "Can you beat me?"}`;
   const url = r.mode === "arcade" && !r.flagged && r.runId ? `${location.origin}/?race=${r.runId}` : location.origin + location.pathname;
+  // Share a picture of the result when the device can, otherwise download it and copy the text
+  const blob = await resultCard(r, { player: S.profile?.name || "Me", skinColor: savedSkin().color }).catch(() => null);
+  const file = blob && new File([blob], "pack-ween-result.png", { type: "image/png" });
   try {
-    if (navigator.share) await navigator.share({ title: "Pack_Ween", text, url });
-    else { await navigator.clipboard.writeText(`${text} ${url}`); toast("Copied to clipboard!", "good"); }
+    if (file && navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ title: "Pack_Ween", text: `${text} ${url}`, files: [file] });
+      return;
+    }
+    if (navigator.share && !file) { await navigator.share({ title: "Pack_Ween", text, url }); return; }
+    if (file) {
+      const a = el("a", { href: URL.createObjectURL(file), download: file.name });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+    await navigator.clipboard?.writeText(`${text} ${url}`);
+    toast(file ? "🖼️ Picture saved and text copied!" : "Copied to clipboard!", "good");
   } catch { /* share sheet closed */ }
 }
 

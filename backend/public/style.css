@@ -337,3 +337,9 @@ body.tilt #vignette { background: linear-gradient(180deg, rgba(13, 6, 18, .95) 0
 .replay-pac.race { opacity: .8; }
 .replay-pac.race span { color: #ff8a9a; }
 .spooky-badge { position: absolute; left: 10px; top: -16px; font-size: 13px; filter: drop-shadow(0 0 6px var(--gold)); }
+
+/* ===== Tutorial coach ===== */
+.coach { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(150px + var(--safe-b)); z-index: 1200; width: min(380px, calc(100% - 32px)); background: rgba(26, 11, 38, .97); border: 2px solid var(--green); border-radius: 16px; padding: 12px 14px; box-shadow: 0 0 20px rgba(124, 255, 79, .45); font-size: 15px; }
+.coach p { margin: 0 0 6px; }
+.coach.pop { animation: pop .3s ease-out; }
+.coach-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--green); letter-spacing: 2px; }
