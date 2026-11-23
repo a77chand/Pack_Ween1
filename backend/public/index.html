@@ -52,7 +52,11 @@
       </button>
     </div>
 
+    <div class="skins-wrap"><span class="small muted">Your Pac-Man</span><div id="skins" class="skins" role="group" aria-label="Pac-Man skin"></div></div>
+
     <button id="go" class="primary big">Start trick-or-treating</button>
+    <button id="dailyBtn" class="daily" type="button">📅 Daily challenge · <span id="dailyTwist"></span></button>
+    <p id="witchStart" class="hint witch-start" hidden>🌕 It's the witching hour: every point counts double until 10 pm!</p>
     <div id="hoodStatus" class="status" aria-live="polite">📍 Finding your neighbourhood…</div>
 
     <div id="live" class="live" hidden>
@@ -73,6 +77,8 @@
         <li>🏠🍬 houses are volunteers handing out candy. Get within <b>25 m</b> and it's yours.</li>
         <li>🍫 <b class="g">Full-size bar houses are power-ups:</b> the ghosts turn purple and run. Eat one for <b>−5 s</b>.</li>
         <li>👻 In Arcade, a ghost that catches you costs <b>+10 s</b>. In Walk mode they're harmless and just drift around for atmosphere. Most candy wins; time breaks ties.</li>
+        <li>⭐ In Arcade, eat the dots on every street, chain candy for combos up to <b>x5</b>, and clear a neighbourhood to level up. You have 3 lives, and the ghosts get faster each level.</li>
+        <li>⚡ Energy-drink houses boost your speed, 🎭 costume houses hide you from the ghosts, and 🕸️ haunted houses make them furious.</li>
         <li>🧭 <b>Route</b> lays Pac-dots along the shortest walk through every house.</li>
         <li><b>Walk · Ranked</b> uses your real GPS and gets its own leaderboard. The server checks your speed, so no cars or teleporting.</li>
       </ol>
@@ -86,6 +92,7 @@
     <span class="hud-score">🍬 <b id="score">0</b><span class="dim">/<span id="total">0</span></span></span>
     <span class="hud-time">⏱ <b id="time">0:00</b><small id="adj"></small></span>
   </div>
+  <div class="hud-game"><span>⭐ <b id="pts">0</b></span><span id="combo" class="combo"></span><span id="lives"></span><span id="lvl" class="lvl"></span><span id="witch" class="witch" hidden>🌕 x2</span></div>
   <div class="hud-next"><span id="compass" aria-hidden="true">➤</span><span id="next">Looking for candy…</span></div>
   <div id="powerBar" hidden><i></i></div>
 </header>
@@ -104,7 +111,8 @@
   <div><span class="lg-check">✓</span> Verified by 3+ trick-or-treaters</div>
   <div><span class="lg-ring"></span> 25 m claim zone</div>
   <div><span class="lg-ghost" style="--c:#ff3b5c"></span><span class="lg-ghost" style="--c:#7cff4f"></span><span class="lg-ghost" style="--c:#e8d9f5"></span><span class="lg-ghost" style="--c:#ffc93c"></span> Ghosts: +10 s if caught (Arcade)</div>
-  <div><span class="lg-pac lg-rival"></span> Other players</div>
+  <div><span class="lg-pac lg-rival"></span> Other players (🟢 = live right now)</div>
+  <div>⚡ Speed · 🎭 Invisible · 🕸️ Haunted (Arcade)</div>
   <div><span class="lg-dots">• • •</span> Route (Pac-dots)</div>
 </aside>
 

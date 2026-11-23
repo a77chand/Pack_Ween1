@@ -44,6 +44,8 @@ export class Ghosts {
     this.t = 0;
     this.frightUntil = -1;
     this.frightLength = 1;
+    this.levelScale = this.levelScale || 1; // ghosts get faster every level
+    this.rageUntil = -1;
     this.homeNode = this.graph ? this.graph.nearestNode(...this.home) : -1;
     this.homeField = this.graph ? this.graph.dijkstra(this.homeNode).dist : null;
     this.list = KINDS.slice(0, this.count).map((kind, i) => {
@@ -60,6 +62,7 @@ export class Ghosts {
   }
 
   phase() {
+    if (this.t < this.rageUntil) return "chase";
     const plan = PHASES[this.mode] || PHASES.arcade;
     let t = this.t;
     for (let k = 0; k < plan.length; k++) {
@@ -146,7 +149,14 @@ export class Ghosts {
     const s = this.speeds;
     if (g.state === "eaten") return s.eaten;
     if (g.state === "fright") return s.fright;
-    return g.kind.target === "chase" ? s.chase * 1.06 : s.chase;
+    const rage = this.t < this.rageUntil ? 1.25 : 1;
+    return (g.kind.target === "chase" ? s.chase * 1.06 : s.chase) * this.levelScale * rage;
+  }
+
+  // Haunted house: every ghost leaves the ghost house and hunts faster for a while
+  enrage(seconds) {
+    this.rageUntil = this.t + seconds;
+    for (const g of this.list) if (g.state === "house") g.releaseAt = this.t;
   }
 
   update(dt, player, canCatch) {

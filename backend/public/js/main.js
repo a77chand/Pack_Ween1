@@ -9,6 +9,11 @@ import { projector, distance, bearingXY } from "./geo.js";
 import { StreetGraph, Walker } from "./streets.js";
 import { Ghosts } from "./ghosts.js";
 import { Rivals } from "./rivals.js";
+import { FxLayer } from "./fx.js";
+import {
+  POINTS, COMBO_WINDOW, START_LIVES, SKINS, PERKS, perkFor, savedSkin, saveSkin, pacHtml,
+  isWitchingHour, todayKey, dailyTwist, bestScore, saveBest, loadReplay, saveReplay,
+} from "./arcade.js";
 import { planRoute, sampleDots } from "./route.js";
 import { sfx, isMuted, setMuted } from "./sound.js";
 import { $, el, toast, fmtTime, fmtDist, openModal, confirmModal, floatText, vibrate, reducedMotion } from "./ui.js";
@@ -67,7 +72,18 @@ const S = {
   previewGraph: null,   // street graph for the map behind the start screen
   activity: null,
   feedSeen: 0,
+  game: null,           // score, lives and level, carried from level to level
+  boostUntil: 0,
+  ghostedUntil: 0,
+  trail: [],            // this run's path, for the best-run replay
+  replay: null,
+  live: new Map(),      // runId -> marker of a real player mid-run
 };
+
+function newGame(daily = false) {
+  const twist = daily ? dailyTwist() : null;
+  return { score: 0, level: 1, lives: twist?.lives ?? START_LIVES, combo: 0, lastClaim: -99, chain: 0, daily, twist, dayKey: todayKey() };
+}
 
 const toXY = (lat, lng) => S.proj.toXY(lat, lng);
 const toLatLng = (x, y) => S.proj.toLatLng(x, y);
@@ -98,21 +114,19 @@ const rivals = new Rivals({
   onArrive: (r, latlng) => { if (map.getBounds().contains(latlng)) floatText(map, latlng, "+1 🍬", "rival"); },
 });
 map.on("dragstart", () => { if (S.playing) S.userPannedAt = Date.now(); });
+const fx = new FxLayer(map);
+fx.onFlash = () => sfx.thunder();
 
 const decorIcon = L.divIcon({ className: "", html: '<div class="decor">🏠</div>', iconSize: [18, 18], iconAnchor: [9, 9] });
-const pacIcon = L.divIcon({
-  className: "pac-icon",
-  html: '<div class="pac idle"><div class="pac-glow"></div><div class="body"></div><div class="eye"></div><div class="stem"></div></div>',
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-});
+const pacIcon = (skin) => L.divIcon({ className: "pac-icon", html: pacHtml(skin), iconSize: [32, 32], iconAnchor: [16, 16] });
 
 function houseIcon(h) {
-  const cls = ["house", h.visited && "done", h.fullSize && "power", h.justClaimed && "claim"].filter(Boolean).join(" ");
+  const cls = ["house", h.visited && "done", h.fullSize && "power", h.perk && "perk", h.justClaimed && "claim"].filter(Boolean).join(" ");
   const badge = h.verified ? '<span class="v" title="Verified">✓</span>' : "";
+  const treat = h.fullSize ? "🍫" : h.perk ? PERKS[h.perk].icon : "🍬";
   return L.divIcon({
     className: "",
-    html: `<div class="${cls}">${badge}<span>🏠</span><span class="c">${h.fullSize ? "🍫" : "🍬"}</span></div>`,
+    html: `<div class="${cls}">${badge}<span>🏠</span><span class="c">${treat}</span></div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
   });
@@ -123,7 +137,8 @@ function setHouses(list) {
   houseLayer.clearLayers();
   S.houses = list.map((h) => {
     const [x, y] = toXY(h.lat, h.lng);
-    const house = { ...h, x, y, node: -1, visited: !!h.visited };
+    const house = { ...h, x, y, node: -1, visited: !!h.visited, ll: L.latLng(h.lat, h.lng) };
+    house.perk = (S.run?.mode ?? S.mode) === "arcade" ? perkFor(house) : null;
     L.circle([h.lat, h.lng], { radius: RADIUS, color: "#ff7518", fillColor: "#8b3dff", weight: 2, fillOpacity: 0.15, interactive: false }).addTo(houseLayer);
     house.marker = L.marker([h.lat, h.lng], { icon: houseIcon(house), riseOnHover: true, keyboard: false })
       .addTo(houseLayer)
@@ -133,6 +148,7 @@ function setHouses(list) {
   });
   $("total").textContent = S.houses.length;
   $("score").textContent = S.houses.filter((h) => h.visited).length;
+  fx.setHouses(S.houses);
   drawDecor();
 }
 
@@ -307,6 +323,8 @@ function enterStreets() {
   if (S.run.mode === "arcade") S.pac.useGraph(S.graph);
   makeGhosts();
   refreshRivals();
+  const xs = S.houses.map((h) => h.x), ys = S.houses.map((h) => h.y);
+  fx.makeDots(S.graph, toLatLng, [Math.min(...xs) - 80, Math.max(...xs) + 80, Math.min(...ys) - 80, Math.max(...ys) + 80]);
   if (S.routeOn) showRoute(true);
   toast("🗺️ Street maze loaded! Now you're running the real streets", "good");
 }
@@ -327,6 +345,7 @@ function renderWho() {
   const p = S.profile;
   $("signedIn").hidden = !p;
   $("signIn").hidden = !!p;
+  renderSkins();
   if (!p) { $("resumeBox").hidden = true; return; }
   $("meName").textContent = p.name;
   const st = p.stats;
@@ -425,7 +444,7 @@ class Pac {
       if (l > 0.02) { this.hx = dx / l; this.hy = dy / l; }
       return;
     }
-    const step = ARCADE_SPEED * dt;
+    const step = ARCADE_SPEED * dt * (clock < S.boostUntil ? 1.3 : 1); // 1.3x stays inside the server's speed check
     if (this.walker) {
       this.walker.advance(step, (n, c) => this.choose(n, c));
       this.x = this.walker.x;
@@ -531,7 +550,15 @@ function caught(ghost) {
     setTimeout(() => pacEl?.classList.remove("blink"), cfg.invuln * 1000);
   }, 900);
   floatText(map, toLatLng(S.pac.x, S.pac.y), "+10s", "bad");
-  toast(`👻 ${ghost.kind.name} got you! +10 s`, "bad");
+  S.game.lives--;
+  S.game.combo = 0;
+  updateGameHud();
+  if (S.game.lives <= 0) {
+    toast(`💀 ${ghost.kind.name} got your last life. Game over!`, "bad", 3500);
+    setTimeout(() => finishRun({ gameOver: true }), 1000);
+  } else {
+    toast(`👻 ${ghost.kind.name} got you! −1 life, +10 s`, "bad");
+  }
   api(`/runs/${S.run.runId}/event`, { body: { type: "spooked" } })
     .then((r) => { S.run.penalty = r.penalty; S.run.bonus = r.bonus; S.run.spooks++; updateClock(); })
     .catch(() => {});
@@ -540,7 +567,9 @@ function caught(ghost) {
 function ateGhost(ghost) {
   sfx.eat();
   vibrate(30);
-  floatText(map, toLatLng(ghost.x, ghost.y), "−5s", "good");
+  const pts = POINTS.ghost[Math.min(S.game.chain++, 3)];
+  addScore(pts);
+  floatText(map, toLatLng(ghost.x, ghost.y), `${pts * scoreMult()}`, "good");
   api(`/runs/${S.run.runId}/event`, { body: { type: "ghost" } })
     .then((r) => {
       S.run.penalty = r.penalty;
@@ -562,6 +591,7 @@ function flashBody(cls, ms) {
 function powerUp() {
   const secs = GAME[S.run.mode].fright;
   S.ghosts?.frighten(secs);
+  S.game.chain = 0;
   sfx.power();
   toast(S.run.mode === "gps" ? "🍫 Full-size bars! Even the ghosts are scared of you 👻" : "🍫 Full-size bar! The ghosts are scared. Eat them!", "good", 3500);
 }
@@ -592,13 +622,20 @@ async function claim(h) {
     score.classList.add("bump");
     sfx.candy();
     vibrate(40);
-    floatText(map, [h.lat, h.lng], h.fullSize ? "+1 🍫" : "+1 🍬");
+    // combos: keep claiming within COMBO_WINDOW seconds for up to x5
+    const g = S.game;
+    g.combo = S.clock - g.lastClaim < COMBO_WINDOW ? Math.min(5, g.combo + 1) : 1;
+    g.lastClaim = S.clock;
+    const pts = POINTS.candy * g.combo;
+    addScore(pts);
+    floatText(map, [h.lat, h.lng], g.combo > 1 ? `+${pts * scoreMult()} x${g.combo}!` : `+${pts * scoreMult()}`);
     if (r.power) powerUp();
+    if (h.perk && S.run.mode === "arcade") usePerk(h.perk);
     if (r.remaining === 0) {
       sfx.win();
-      toast("🎉 WAKA WAKA! You got all the candy!", "good", 3000);
-      setTimeout(() => finishRun(), 1100);
-    } else if (!r.power) {
+      toast(S.run.mode === "arcade" ? `🎉 Level ${g.level} clear!` : "🎉 WAKA WAKA! You got all the candy!", "good", 3000);
+      setTimeout(() => finishRun({ levelClear: S.run.mode === "arcade" }), 1100);
+    } else if (!r.power && !h.perk) {
       toast(`🍬 ${h.name}! ${r.remaining} to go`, "good");
     }
     if (S.routeOn) showRoute(true);
@@ -754,19 +791,125 @@ function frame(t) {
   const dt = Math.min(0.05, (t - (lastFrame || t)) / 1000);
   lastFrame = t;
   rivals.update(dt);
+  fxTime += dt;
+  fx.draw(dt, {
+    pac: S.playing && S.pac ? toLatLng(S.pac.x, S.pac.y) : null,
+    fog: S.playing && S.run.mode === "arcade" ? (S.game.twist?.fog ?? 0.32) : 0,
+    powered: !!S.ghosts?.frightened,
+    t: fxTime,
+  });
+  moveLive(dt);
   if (!S.playing) return;
   S.clock += dt;
   S.pac.update(dt, S.clock);
   drawPac();
-  S.ghosts?.update(dt, S.pac, S.clock >= S.invulnUntil && !S.finishing);
+  const hidden = S.clock < S.ghostedUntil;
+  S.ghosts?.update(dt, S.pac, S.clock >= S.invulnUntil && !hidden && !S.finishing);
+  playReplay();
   follow();
   if (S.clock - lastCheck > 0.15) {
     lastCheck = S.clock;
+    S.trail.push([Math.round(S.clock * 10) / 10, ...toLatLng(S.pac.x, S.pac.y).map((v) => Number(v.toFixed(6)))]);
     checkClaims();
     eatDots();
+    eatStreetDots();
     updateNext();
     updatePower();
+    pacEl?.classList.toggle("ghosted", hidden);
+    pacEl?.classList.toggle("boosted", S.clock < S.boostUntil);
   }
+}
+let fxTime = 0;
+
+// ---------- Score, perks, replay ----------
+const scoreMult = () => (isWitchingHour() ? 2 : 1);
+
+function addScore(points) {
+  S.game.score += points * scoreMult();
+  updateGameHud();
+}
+
+function updateGameHud() {
+  const g = S.game;
+  if (!g) return;
+  $("pts").textContent = g.score.toLocaleString();
+  $("lives").textContent = S.run?.mode === "arcade" ? "❤️".repeat(Math.max(0, g.lives)) : "";
+  $("lvl").textContent = S.run?.mode === "arcade" ? `L${g.level}` : "";
+  $("combo").textContent = g.combo > 1 && S.clock - g.lastClaim < COMBO_WINDOW ? `x${g.combo}` : "";
+}
+
+// Pac-dots on every street: 10 points each, eaten as you run over them
+let lastDotSound = 0;
+function eatStreetDots() {
+  const n = fx.eat(S.pac.x, S.pac.y);
+  if (!n) return;
+  addScore(n * POINTS.dot * (S.game.twist?.dotMult ?? 1));
+  if (S.clock - lastDotSound > 0.12) { sfx.waka(); lastDotSound = S.clock; }
+}
+
+function usePerk(perk) {
+  const p = PERKS[perk];
+  if (perk === "speed") S.boostUntil = S.clock + p.seconds;
+  if (perk === "ghosted") S.ghostedUntil = S.clock + p.seconds;
+  if (perk === "haunted") S.ghosts?.enrage(p.seconds);
+  perk === "haunted" ? sfx.spooked() : sfx.power();
+  toast(`${p.icon} ${p.label}`, perk === "haunted" ? "bad" : "good", 3000);
+}
+
+// Your fastest clear of this neighbourhood, replayed as a see-through Pac-Man
+const areaKey = () => (S.center ? `${S.center.lat.toFixed(3)},${S.center.lng.toFixed(3)}` : "none");
+let replayMarker = null, replayIdx = 0;
+function startReplay() {
+  replayMarker?.remove();
+  replayMarker = null;
+  replayIdx = 0;
+  S.replay = S.run.mode === "arcade" ? loadReplay(areaKey()) : null;
+  if (!S.replay?.trail?.length) return;
+  const [, lat, lng] = S.replay.trail[0];
+  replayMarker = L.marker([lat, lng], {
+    icon: L.divIcon({ className: "pac-icon", html: `<div class="replay-pac"><div class="pac idle" style="--pc:#e8d9f5"><div class="body"></div></div><span>Your best ${fmtTime(S.replay.seconds)}</span></div>`, iconSize: [32, 32], iconAnchor: [16, 16] }),
+    interactive: false, keyboard: false, zIndexOffset: 700,
+  }).addTo(map);
+}
+function playReplay() {
+  if (!replayMarker) return;
+  const tr = S.replay.trail;
+  while (replayIdx < tr.length - 1 && tr[replayIdx + 1][0] <= S.clock) replayIdx++;
+  const a = tr[replayIdx], b = tr[Math.min(replayIdx + 1, tr.length - 1)];
+  const k = b[0] > a[0] ? Math.min(1, (S.clock - a[0]) / (b[0] - a[0])) : 0;
+  replayMarker.setLatLng([a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]);
+}
+
+// ---------- Live multiplayer ----------
+// Real players mid-run nearby, from /live, glide towards their latest position
+async function pollLive() {
+  if (!S.playing || !S.center) return;
+  const list = await api(`/live?lat=${S.center.lat}&lng=${S.center.lng}`, { retries: 0 }).catch(() => null);
+  if (!list) return;
+  const seen = new Set();
+  for (const p of list) {
+    seen.add(p.runId);
+    let m = S.live.get(p.runId);
+    if (!m) {
+      const icon = el("div", { class: "rival live" }, el("div", { class: "pac rival-pac", style: "--pc:#7cff4f" }, el("div", { class: "body" })),
+        el("span", { class: "rival-name" }, `🟢 ${p.player}`));
+      m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "rival-icon", html: icon, iconSize: [22, 22], iconAnchor: [11, 11] }), interactive: false, keyboard: false, zIndexOffset: 850 }).addTo(map);
+      S.live.set(p.runId, m);
+    }
+    m.target = [p.lat, p.lng];
+  }
+  for (const [id, m] of S.live) if (!seen.has(id)) { m.remove(); S.live.delete(id); }
+}
+function moveLive(dt) {
+  for (const m of S.live.values()) {
+    if (!m.target) continue;
+    const cur = m.getLatLng(), k = 1 - Math.exp(-dt * 2);
+    m.setLatLng([cur.lat + (m.target[0] - cur.lat) * k, cur.lng + (m.target[1] - cur.lng) * k]);
+  }
+}
+function clearLive() {
+  for (const m of S.live.values()) m.remove();
+  S.live.clear();
 }
 requestAnimationFrame(frame);
 
@@ -803,15 +946,18 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- Starting, resuming and finishing ----------
-async function startGame() {
+async function startGame({ daily = false, next = false } = {}) {
   sfx.unlock();
+  if (!next) S.game = newGame(daily);
+  if (daily) { setMode("arcade"); if (!S.isDefault) await loadNeighbourhood(null); }
   const btn = $("go");
   if (!(await ensureSignedIn())) return;
   btn.disabled = true;
   const reset = () => { btn.disabled = false; btn.textContent = "Start trick-or-treating"; };
   try {
     btn.textContent = "Finding you…";
-    let pos = S.located;
+    let pos = S.game.daily ? null : S.located;
+    if (next) pos = { lat: toLatLng(S.pac.x, S.pac.y)[0], lng: toLatLng(S.pac.x, S.pac.y)[1] };
     if (S.mode === "gps") {
       pos = (await locate(12000)) || pos;
       if (!pos) {
@@ -845,6 +991,7 @@ async function startGame() {
 async function resumeRun() {
   const id = S.profile?.activeRun?.runId;
   if (!id) return;
+  S.game = newGame();
   try {
     const run = await api(`/runs/${id}`);
     if (run.ended) { await loadProfile(); return toast("That run already ended", "warn"); }
@@ -880,9 +1027,23 @@ function beginRun(run, x, y) {
   S.pac = new Pac(x, y);
   if (run.mode === "arcade" && S.graph) S.pac.useGraph(S.graph);
   S.pacMarker?.remove();
-  S.pacMarker = L.marker(toLatLng(x, y), { icon: pacIcon, zIndexOffset: 1000, interactive: false, keyboard: false }).addTo(map);
+  S.pacMarker = L.marker(toLatLng(x, y), { icon: pacIcon(savedSkin()), zIndexOffset: 1000, interactive: false, keyboard: false }).addTo(map);
   pacEl = null; lastTf = ""; lastMoving = null;
+  S.boostUntil = S.ghostedUntil = 0;
+  S.trail = [];
+  S.game ||= newGame();
+  S.game.combo = 0;
+  S.game.lastClaim = -99;
   makeGhosts();
+  if (run.mode === "arcade") {
+    S.ghosts.levelScale = (1 + 0.1 * (S.game.level - 1)) * (S.game.twist?.ghostScale ?? 1);
+    if (S.game.twist?.swarm) S.ghosts.enrage(0.01);
+  }
+  // dots on every street around the candy
+  const xs = S.houses.map((h) => h.x).concat(x), ys = S.houses.map((h) => h.y).concat(y);
+  fx.makeDots(S.graph, toLatLng, [Math.min(...xs) - 80, Math.max(...xs) + 80, Math.min(...ys) - 80, Math.max(...ys) + 80]);
+  startReplay();
+  updateGameHud();
   S.feedSeen = Math.max(0, ...(S.activity?.feed || []).map((f) => f.time));
 
   $("start").hidden = true;
@@ -892,7 +1053,8 @@ function beginRun(run, x, y) {
   document.body.classList.add("playing");
   map.setView(toLatLng(x, y), 17, { animate: false });
 
-  S.timers.push(setInterval(updateClock, 250), setInterval(ping, PING_EVERY), setInterval(pollChatBadge, 15000));
+  S.timers.push(setInterval(updateClock, 250), setInterval(ping, PING_EVERY), setInterval(pollChatBadge, 15000), setInterval(pollLive, 2000));
+  $("witch").hidden = !isWitchingHour();
   updateClock();
   if (run.mode === "gps") {
     startGps();
@@ -918,6 +1080,10 @@ function stopPlaying() {
   S.accuracyCircle = null;
   S.ghosts?.destroy();
   S.ghosts = null;
+  replayMarker?.remove();
+  replayMarker = null;
+  clearLive();
+  fx.makeDots(null);
   findLine?.remove();
   setRoute(false);
   for (const id of ["hud", "tools", "bar", "pad", "legend", "banner"]) $(id).hidden = true;
@@ -925,12 +1091,18 @@ function stopPlaying() {
   document.body.classList.remove("playing", "powered");
 }
 
-async function finishRun() {
+async function finishRun({ levelClear = false, gameOver = false } = {}) {
   if (S.finishing || !S.run) return;
   S.finishing = true;
   try {
     const r = await api(`/runs/${S.run.runId}/finish`, { body: {} });
+    const trail = S.trail;
     stopPlaying();
+    if (levelClear && !r.flagged) {
+      if (saveReplay(areaKey(), r.seconds, trail)) toast("👻 New best time here! Your replay will race you next time.", "good", 3500);
+      return showLevelClear(r);
+    }
+    r.gameOver = gameOver;
     showResults(r);
   } catch (e) {
     if (e.message === "run already finished") {
@@ -958,9 +1130,34 @@ async function endButton() {
 }
 
 // ---------- Results & leaderboards ----------
+// Between levels: bank a bonus, then carry score and lives into a faster level
+function showLevelClear(r) {
+  const g = S.game;
+  const timeBonus = Math.max(0, 300 - r.seconds) * 10;
+  addScore(POINTS.levelClear * g.level + timeBonus);
+  sfx.level();
+  let close = null;
+  const next = el("button", { class: "primary big", onclick: () => { close(); g.level++; startGame({ next: true }); } }, `▶ Level ${g.level + 1}`);
+  const stop = el("button", { onclick: () => { close(); showResults(r); } }, "Cash out");
+  close = openModal(el("div", { class: "stack" },
+    el("h2", {}, `🎉 Level ${g.level} clear!`),
+    el("div", { class: "stats" },
+      stat("Score", g.score.toLocaleString(), `+${(POINTS.levelClear * g.level + timeBonus) * scoreMult()} bonus`),
+      stat("Time", fmtTime(r.seconds), timeBonus ? `+${timeBonus * scoreMult()} speed bonus` : "no speed bonus"),
+      stat("Lives", "❤️".repeat(g.lives) || "0", "carried over"),
+      stat("Next", `L${g.level + 1}`, "ghosts get 10% faster")),
+    el("div", { class: "row" }, stop, next)));
+}
+
 function showResults(r) {
   const all = r.houses === r.total;
-  $("resTitle").textContent = all ? "🎉 All candy collected!" : "🏁 Run complete!";
+  const g = S.game || newGame();
+  r.score = g.score;
+  r.level = g.level;
+  r.daily = g.daily ? { key: g.dayKey, twist: g.twist.label } : null;
+  const bestKey = g.daily ? `daily.${g.dayKey}` : r.mode;
+  r.newBest = saveBest(bestKey, g.score);
+  $("resTitle").textContent = r.gameOver ? "💀 Game over!" : r.newBest && g.score ? "🏆 New high score!" : all ? "🎉 All candy collected!" : "🏁 Run complete!";
   const flag = $("resFlag");
   flag.hidden = !r.flagged;
   flag.textContent = "🚩 This run was flagged for moving faster than anyone can walk, so it won't appear on the leaderboard.";
@@ -969,7 +1166,9 @@ function showResults(r) {
     stat("Candy", `${r.houses}/${r.total}`, all ? "full haul!" : `${r.total - r.houses} left behind`),
     stat("Time", fmtTime(r.seconds), adj || "no ghost trouble"),
     stat("Distance", fmtDist(r.meters), r.mode === "gps" ? "walked" : "run"),
-    r.mode === "gps" ? stat("Ghosts", "👻", "just along for the vibes") : stat("Ghosts eaten", String(r.ghosts), r.spooks ? `caught ${r.spooks}×` : "never caught"));
+    r.mode === "gps" ? stat("Ghosts", "👻", "just along for the vibes") : stat("Ghosts eaten", String(r.ghosts), r.spooks ? `caught ${r.spooks}×` : "never caught"),
+    stat("Score", g.score.toLocaleString(), r.newBest ? "personal best!" : `best ${bestScore(bestKey).toLocaleString()}`),
+    stat(g.daily ? "Daily" : "Level", g.daily ? g.twist.label : `L${g.level}`, g.daily ? g.dayKey : "reached"));
   renderBoard($("resBoard"), { mode: r.mode, scope: "street", at: S.run.startLatLng });
   $("results").hidden = false;
   S.lastResult = r;
@@ -1026,7 +1225,9 @@ function openLeaderboard() {
 async function share() {
   const r = S.lastResult;
   if (!r) return;
-  const text = `🎃 I collected ${r.houses}/${r.total} candy in ${fmtTime(r.seconds)} on Pack_Ween${r.ghosts ? ` and ate ${r.ghosts} ghost${r.ghosts === 1 ? "" : "s"}` : ""}! Can you beat me?`;
+  const head = r.daily ? `🎃 Pack_Ween Daily ${r.daily.key} (${r.daily.twist})` : `🎃 Pack_Ween · level ${r.level}`;
+  const candy = "🟧".repeat(r.houses) + "⬛".repeat(Math.max(0, r.total - r.houses));
+  const text = `${head}\n⭐ ${r.score.toLocaleString()} · ${r.houses}/${r.total} 🍬 · ⏱ ${fmtTime(r.seconds)}${r.ghosts ? ` · 👻×${r.ghosts}` : ""}\n${candy}\nCan you beat me?`;
   const url = location.origin + location.pathname;
   try {
     if (navigator.share) await navigator.share({ title: "Pack_Ween", text, url });
@@ -1131,6 +1332,7 @@ function refreshRivals() {
   else if (S.streetsStatus === "ready") graph = S.previewGraph || (S.previewGraph = new StreetGraph(S.streets, S.proj));
   const speed = S.playing && S.run.mode === "gps" ? [1.2, 1.7] : [12, 17];
   rivals.setWorld(graph, S.houses.map((h) => [h.x, h.y]), speed);
+  fx.setStreets(graph, toLatLng);
 }
 
 const ago = (t) => {
@@ -1171,10 +1373,28 @@ function setMode(mode) {
 document.querySelectorAll(".mode").forEach((b) => (b.onclick = () => { sfx.click(); setMode(b.dataset.mode); }));
 setMode(S.mode);
 
-$("go").onclick = startGame;
+$("go").onclick = () => startGame();
+$("dailyBtn").onclick = () => startGame({ daily: true });
 $("signIn").onsubmit = (e) => e.preventDefault();
 $("name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("pin").focus(); } });
 $("pin").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); startGame(); } });
+
+// Skins: unlocked by lifetime candy
+function renderSkins() {
+  const have = S.profile?.stats?.candy ?? 0;
+  const current = savedSkin().id;
+  $("skins").replaceChildren(...SKINS.map((sk) => {
+    const locked = have < sk.need;
+    return el("button", {
+      type: "button", class: `skin${sk.id === current ? " on" : ""}${locked ? " locked" : ""}`, title: locked ? `${sk.name}: collect ${sk.need} candy to unlock` : sk.name,
+      "aria-pressed": String(sk.id === current), disabled: locked,
+      onclick: () => { saveSkin(sk.id); sfx.click(); renderSkins(); },
+    }, el("span", { class: "skin-dot", style: `--pc:${sk.color}` }), locked ? `🔒 ${sk.need}` : sk.name);
+  }));
+}
+renderSkins();
+$("dailyTwist").textContent = dailyTwist().label;
+$("witchStart").hidden = !isWitchingHour();
 $("demoBtn").onclick = async () => {
   $("name").value = "Demo";
   $("pin").value = "1234";

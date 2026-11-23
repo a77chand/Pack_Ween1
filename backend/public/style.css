@@ -45,7 +45,7 @@ b.g { color: var(--green); }
 #map { position: fixed; inset: 0; z-index: 1; background: var(--panel); }
 .leaflet-container { background: var(--panel); font: inherit; }
 /* dark-mode streets: recolours the tiles only, the map data is unchanged */
-.leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(1.25) contrast(1.15) saturate(.7); }
+.leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(1.2) saturate(.5); }
 .leaflet-control-attribution { background: rgba(13, 6, 18, .75) !important; color: var(--muted); font-size: 10px; }
 .leaflet-control-attribution a { color: var(--gold); }
 body.playing .leaflet-control-attribution { margin-bottom: calc(66px + var(--safe-b)) !important; }
@@ -277,3 +277,28 @@ body:not(.playing) #toasts { top: auto; bottom: calc(20px + var(--safe-b)); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
   .pac .body { animation: none; }
 }
+
+/* ===== Arcade layer ===== */
+.fx-canvas { pointer-events: none; }
+.hud-game { margin-top: 5px; display: flex; gap: 10px; justify-content: center; align-items: center; font-size: 10px; white-space: nowrap; }
+.hud-game b { color: #fff; }
+.combo { color: var(--green); animation: bump .35s; }
+.lvl { color: #c79bff; }
+.witch { color: var(--gold); }
+.skins-wrap { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.skins { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.skin { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; border-radius: 999px; background: #160a22; }
+.skin.on { border-color: var(--orange); box-shadow: 0 0 10px rgba(255, 117, 24, .5); }
+.skin.locked { opacity: .5; cursor: not-allowed; }
+.skin-dot { width: 14px; height: 14px; border-radius: 50%; background: conic-gradient(from 110deg, var(--pc) 0 320deg, transparent 0); }
+.daily { background: linear-gradient(90deg, #3b0a57, #1f0d2e); border-color: var(--purple); color: var(--gold); font-weight: 700; }
+.witch-start { color: var(--gold) !important; }
+.pac .hat { position: absolute; left: 7px; top: -12px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 14px solid #12071b; filter: drop-shadow(0 0 3px var(--purple)); }
+.pac .hat::after { content: ""; position: absolute; left: -11px; top: 12px; width: 22px; height: 3px; background: #12071b; border-radius: 2px; }
+.pac .acc { position: absolute; left: 9px; top: -14px; font-size: 13px; line-height: 1; }
+.pac.ghosted { opacity: .35; }
+.pac.boosted .body { filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 14px var(--gold)) drop-shadow(0 0 4px var(--gold)); }
+.replay-pac { position: relative; width: 32px; height: 32px; opacity: .45; }
+.replay-pac span { position: absolute; top: 33px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--text); background: rgba(13, 6, 18, .7); border-radius: 6px; padding: 1px 5px; white-space: nowrap; }
+.rival.live .rival-name { color: var(--green); }
+.house.perk .c { filter: drop-shadow(0 0 7px var(--gold)); }

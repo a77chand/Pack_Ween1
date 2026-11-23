@@ -21,6 +21,18 @@ Play it two ways:
 
 ## Features
 
+**Arcade mode plays like a real arcade game:**
+- 🌃 **Neon maze.** The real streets are redrawn as glowing neon corridors over a darkened city, with fog of war around Pac-Man, flickering jack-o'-lantern houses, drifting mist, and lightning with thunder.
+- ⭐ **Score, combos, lives and levels.** Pac-dots run along every street (10 points each). Candy is worth 100 times your combo (chain houses within 10 s for up to x5). Ghosts are worth 200 → 400 → 800 → 1600. You get 3 lives, and clearing a neighbourhood banks a level bonus and starts the next level with ghosts 10% faster.
+- ⚡ **Extra power-ups.** Energy-drink houses give a speed boost, 🎭 costume houses make the ghosts lose sight of you, and 🕸️ haunted houses send every ghost into a frenzy.
+- 🎨 **Unlockable skins.** Pumpkin, Witch, Vampire, Skeleton and Golden Pac-Men unlock with lifetime candy.
+- 📅 **Daily challenge.** Everyone plays the same neighbourhood with the day's twist (speedy ghosts, one life, pitch dark, double dots or a ghost swarm). It ends with a shareable emoji result card.
+- 👻 **Best-run replay.** Your fastest clear of an area comes back as a see-through Pac-Man to race against.
+- 🟢 **Live multiplayer.** Real players mid-run nearby show up on your map in real time.
+- 🌕 **Witching hour.** Every point counts double from 9 to 10 pm.
+
+**Under the hood:**
+
 - 🗺️ **Real streets as the maze.** Streets and footpaths from OpenStreetMap are compacted into a graph (largest connected piece only, straight stretches simplified). Every candy house gets a "driveway" onto it, so every house is reachable.
 - 👻 **Ghost AI (Arcade).** Banshee chases you directly, Ghoul cuts you off ahead, Sheet flanks you with Banshee, and Spook loses its nerve up close. At each junction a ghost takes the street that is shortest to its target, using a Dijkstra distance field refreshed a few times a second. It never turns back except at a dead end.
 - 🍫 **Power-ups.** Full-size-bar houses frighten the ghosts; eat one for **−5 s**. In Arcade, a ghost that catches you costs **+10 s**.
@@ -73,7 +85,7 @@ Needs [Node.js](https://nodejs.org/) 22.13 or newer.
 cd backend
 npm install
 npm start        # http://localhost:4000
-npm test         # 20 tests
+npm test         # 21 tests
 ```
 
 | Environment variable | Default | What it does |
@@ -111,6 +123,7 @@ The backend serves the game and a JSON API. Full request and response examples a
 | GET | `/route?lat=&lng=&runId=` | Suggested walking order through the remaining houses |
 | GET / POST | `/chat` | Read and post neighbourhood chat (demo players reply) |
 | GET | `/activity?lat=&lng=` | Who's playing near you and what just happened |
+| GET | `/live?lat=&lng=` | Real players mid-run nearby and their latest positions |
 
 ## Project structure
 
@@ -131,6 +144,8 @@ backend/
     js/streets.js       Street graph, Dijkstra, the Walker that moves along streets
     js/ghosts.js        Ghost AI (harmless wanderers in Walk mode)
     js/rivals.js        Other players' Pac-Men running between the houses
+    js/fx.js            Neon maze, street dots, fog of war, mist and lightning (canvas)
+    js/arcade.js        Score, skins, power-up houses, daily challenge, replays
     js/route.js         Street routes and Pac-dots
     js/sound.js         Web Audio sound effects
   osm/waterloo.json     Pre-baked street map for the demo neighbourhood

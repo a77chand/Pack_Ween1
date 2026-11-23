@@ -579,6 +579,27 @@ function createApp({
     res.json({ id: Number(r.lastInsertRowid), ...msg, bot: false });
   });
 
+  // ---------- Live multiplayer ----------
+  // Real players mid-run near a point and where they were a moment ago (from their
+  // pings), so everyone sees each other's Pac-Man on the map. Your own run is left out.
+  app.get("/live", (req, res) => {
+    const pos = readLatLng(req.query);
+    if (!pos) return res.status(400).json({ error: "lat and lng are required" });
+    const viewer = currentPlayer(req);
+    const radius = SCOPES.district;
+    const dLat = radius / 111320, dLng = radius / (111320 * Math.cos(toRad(pos.lat)));
+    const rows = db.prepare(`
+      SELECT r.id, r.mode, r.last_lat, r.last_lng, r.session_hash, p.name,
+        (SELECT COUNT(*) FROM run_houses WHERE run_id = r.id AND visited_at IS NOT NULL) AS houses
+      FROM runs r JOIN players p ON p.id = r.player_id
+      WHERE r.end_time IS NULL AND r.last_time > ? AND r.flagged = 0
+        AND r.last_lat BETWEEN ? AND ? AND r.last_lng BETWEEN ? AND ?`)
+      .all(now() - 30 * 1000, pos.lat - dLat, pos.lat + dLat, pos.lng - dLng, pos.lng + dLng);
+    res.json(rows
+      .filter((r) => !viewer || r.session_hash !== viewer.tokenHash)
+      .map((r) => ({ runId: r.id, player: r.name, mode: r.mode, lat: r.last_lat, lng: r.last_lng, houses: r.houses })));
+  });
+
   // ---------- Who's playing ----------
   // Players out right now near a point, plus a feed of what happened recently
   app.get("/activity", (req, res) => {

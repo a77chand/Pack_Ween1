@@ -382,3 +382,15 @@ test("activity: who's playing and a feed of what just happened", async () => {
   assert.ok(a.feed.some((f) => f.text.startsWith("Speedy finished with 12")), "real finishes show up too");
   assert.ok(a.feed.every((f, i) => i === 0 || a.feed[i - 1].time >= f.time));
 });
+
+test("live: players mid-run see each other, but not themselves", async () => {
+  const a = (await onBots("POST", "/players", { body: { name: "LiveA", pin: "1234" } })).body.token;
+  const b = (await onBots("POST", "/players", { body: { name: "LiveB", pin: "1234" } })).body.token;
+  await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: a });
+  await onBots("POST", "/runs/start", { body: { mode: "arcade", ...DEFAULT_CENTER }, token: b });
+  const at = `lat=${DEFAULT_CENTER.lat}&lng=${DEFAULT_CENTER.lng}`;
+  const seenByA = (await onBots("GET", `/live?${at}`, { token: a })).body.map((p) => p.player);
+  assert.ok(seenByA.includes("LiveB") && !seenByA.includes("LiveA"));
+  tick(60);
+  assert.ok(!(await onBots("GET", `/live?${at}`, { token: a })).body.some((p) => p.player === "LiveB"), "gone after 30 s without a ping");
+});

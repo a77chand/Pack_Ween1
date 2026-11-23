@@ -58,6 +58,28 @@ export const sfx = {
   win() {
     [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone({ freq: f, dur: 0.14, delay: i * 0.12, vol: 0.06 }));
   },
+  // rolling thunder: filtered noise that fades out
+  thunder() {
+    if (muted) return;
+    const ac = audio();
+    if (!ac) return;
+    const len = ac.sampleRate * 1.6;
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.5);
+    const src = ac.createBufferSource();
+    const filter = ac.createBiquadFilter();
+    const gain = ac.createGain();
+    filter.type = "lowpass";
+    filter.frequency.value = 260;
+    gain.gain.value = 0.5;
+    src.buffer = buf;
+    src.connect(filter).connect(gain).connect(ac.destination);
+    src.start();
+  },
+  level() {
+    [392, 523, 659, 784, 1047, 1319].forEach((f, i) => tone({ freq: f, dur: 0.12, delay: i * 0.09, vol: 0.06 }));
+  },
   warn() { tone({ freq: 220, to: 180, dur: 0.25, type: "sawtooth", vol: 0.04 }); },
   click() { tone({ freq: 900, to: 700, dur: 0.04, type: "square", vol: 0.03 }); },
 };
